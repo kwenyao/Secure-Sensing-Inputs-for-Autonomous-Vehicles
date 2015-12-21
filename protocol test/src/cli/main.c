@@ -396,17 +396,17 @@ int ecc_verify(struct lca_octet_buffer signature)
 	struct lca_octet_buffer pub_key = {0,0};
 	struct lca_octet_buffer file_digest = {0,0};
 	
-	long testSize;
-	char* test = readFile(FILENAME_PUBLICKEY,&testSize);
-	pub_key = lca_ascii_hex_2_bin(test,(unsigned int)testSize);
-	printf("readFile Test\n");
-	printHex(pub_key.ptr,pub_key.len);
+	// long testSize;
+	// char* test = readFile(FILENAME_PUBLICKEY,&testSize);
+	// pub_key = lca_ascii_hex_2_bin(test,(unsigned int)testSize);
+	// printf("readFile Test\n");
+	// printHex(pub_key.ptr,pub_key.len);
 
 	char* buffer = read_file(FILENAME_PUBLICKEY);
 	args.pub_key = buffer;
 	pub_key = lca_ascii_hex_2_bin (args.pub_key, 130);
-	printf("read_file Control\n");
-	printHex(pub_key.ptr,pub_key.len);
+	// printf("read_file Control\n");
+	// printHex(pub_key.ptr,pub_key.len);
 
 	if (NULL == signature.ptr)
 	{
@@ -627,10 +627,10 @@ int main()
 	 /*******************************
 	 * ECC
 	 *******************************/
-	 printf("\nECC STARTS HERE\n");
-	 ecc_gen_key();
-	 struct lca_octet_buffer ecc_signature = ecc_sign();
-	 ecc_verify(ecc_signature);
+	 // printf("\nECC STARTS HERE\n");
+	 // ecc_gen_key();
+	 // struct lca_octet_buffer ecc_signature = ecc_sign();
+	 // ecc_verify(ecc_signature);
 
 	/*******************************
 	 * POSTLUDE

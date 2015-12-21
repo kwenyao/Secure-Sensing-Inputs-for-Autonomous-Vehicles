@@ -1,0 +1,158 @@
+src/libcryptoauth_0.2_la-configfile.lo: src/configfile.c \
+ /usr/include/stdio.h /usr/include/features.h \
+ /usr/include/arm-linux-gnueabihf/bits/predefs.h \
+ /usr/include/arm-linux-gnueabihf/sys/cdefs.h \
+ /usr/include/arm-linux-gnueabihf/bits/wordsize.h \
+ /usr/include/arm-linux-gnueabihf/gnu/stubs.h \
+ /usr/lib/gcc/arm-linux-gnueabihf/4.6/include/stddef.h \
+ /usr/include/arm-linux-gnueabihf/bits/types.h \
+ /usr/include/arm-linux-gnueabihf/bits/typesizes.h /usr/include/libio.h \
+ /usr/include/_G_config.h /usr/include/wchar.h \
+ /usr/lib/gcc/arm-linux-gnueabihf/4.6/include/stdarg.h \
+ /usr/include/arm-linux-gnueabihf/bits/stdio_lim.h \
+ /usr/include/arm-linux-gnueabihf/bits/sys_errlist.h \
+ /usr/include/arm-linux-gnueabihf/bits/stdio.h /usr/include/string.h \
+ /usr/include/xlocale.h /usr/include/arm-linux-gnueabihf/bits/string.h \
+ /usr/include/arm-linux-gnueabihf/bits/string2.h /usr/include/stdlib.h \
+ /usr/include/arm-linux-gnueabihf/bits/waitflags.h \
+ /usr/include/arm-linux-gnueabihf/bits/waitstatus.h /usr/include/endian.h \
+ /usr/include/arm-linux-gnueabihf/bits/endian.h \
+ /usr/include/arm-linux-gnueabihf/bits/byteswap.h \
+ /usr/include/arm-linux-gnueabihf/sys/types.h /usr/include/time.h \
+ /usr/include/arm-linux-gnueabihf/sys/select.h \
+ /usr/include/arm-linux-gnueabihf/bits/select.h \
+ /usr/include/arm-linux-gnueabihf/bits/sigset.h \
+ /usr/include/arm-linux-gnueabihf/bits/time.h \
+ /usr/include/arm-linux-gnueabihf/sys/sysmacros.h \
+ /usr/include/arm-linux-gnueabihf/bits/pthreadtypes.h \
+ /usr/include/alloca.h /usr/include/libxml2/libxml/xmlmemory.h \
+ /usr/include/libxml2/libxml/xmlversion.h \
+ /usr/include/libxml2/libxml/xmlexports.h \
+ /usr/include/libxml2/libxml/threads.h \
+ /usr/include/libxml2/libxml/globals.h \
+ /usr/include/libxml2/libxml/parser.h /usr/include/libxml2/libxml/tree.h \
+ /usr/include/libxml2/libxml/xmlstring.h \
+ /usr/include/libxml2/libxml/xmlregexp.h \
+ /usr/include/libxml2/libxml/dict.h /usr/include/libxml2/libxml/hash.h \
+ /usr/include/libxml2/libxml/valid.h \
+ /usr/include/libxml2/libxml/xmlerror.h \
+ /usr/include/libxml2/libxml/list.h \
+ /usr/include/libxml2/libxml/xmlautomata.h \
+ /usr/include/libxml2/libxml/entities.h \
+ /usr/include/libxml2/libxml/encoding.h /usr/include/iconv.h \
+ /usr/include/libxml2/libxml/xmlIO.h /usr/include/libxml2/libxml/SAX.h \
+ /usr/include/libxml2/libxml/xlink.h /usr/include/libxml2/libxml/SAX2.h
+
+/usr/include/stdio.h:
+
+/usr/include/features.h:
+
+/usr/include/arm-linux-gnueabihf/bits/predefs.h:
+
+/usr/include/arm-linux-gnueabihf/sys/cdefs.h:
+
+/usr/include/arm-linux-gnueabihf/bits/wordsize.h:
+
+/usr/include/arm-linux-gnueabihf/gnu/stubs.h:
+
+/usr/lib/gcc/arm-linux-gnueabihf/4.6/include/stddef.h:
+
+/usr/include/arm-linux-gnueabihf/bits/types.h:
+
+/usr/include/arm-linux-gnueabihf/bits/typesizes.h:
+
+/usr/include/libio.h:
+
+/usr/include/_G_config.h:
+
+/usr/include/wchar.h:
+
+/usr/lib/gcc/arm-linux-gnueabihf/4.6/include/stdarg.h:
+
+/usr/include/arm-linux-gnueabihf/bits/stdio_lim.h:
+
+/usr/include/arm-linux-gnueabihf/bits/sys_errlist.h:
+
+/usr/include/arm-linux-gnueabihf/bits/stdio.h:
+
+/usr/include/string.h:
+
+/usr/include/xlocale.h:
+
+/usr/include/arm-linux-gnueabihf/bits/string.h:
+
+/usr/include/arm-linux-gnueabihf/bits/string2.h:
+
+/usr/include/stdlib.h:
+
+/usr/include/arm-linux-gnueabihf/bits/waitflags.h:
+
+/usr/include/arm-linux-gnueabihf/bits/waitstatus.h:
+
+/usr/include/endian.h:
+
+/usr/include/arm-linux-gnueabihf/bits/endian.h:
+
+/usr/include/arm-linux-gnueabihf/bits/byteswap.h:
+
+/usr/include/arm-linux-gnueabihf/sys/types.h:
+
+/usr/include/time.h:
+
+/usr/include/arm-linux-gnueabihf/sys/select.h:
+
+/usr/include/arm-linux-gnueabihf/bits/select.h:
+
+/usr/include/arm-linux-gnueabihf/bits/sigset.h:
+
+/usr/include/arm-linux-gnueabihf/bits/time.h:
+
+/usr/include/arm-linux-gnueabihf/sys/sysmacros.h:
+
+/usr/include/arm-linux-gnueabihf/bits/pthreadtypes.h:
+
+/usr/include/alloca.h:
+
+/usr/include/libxml2/libxml/xmlmemory.h:
+
+/usr/include/libxml2/libxml/xmlversion.h:
+
+/usr/include/libxml2/libxml/xmlexports.h:
+
+/usr/include/libxml2/libxml/threads.h:
+
+/usr/include/libxml2/libxml/globals.h:
+
+/usr/include/libxml2/libxml/parser.h:
+
+/usr/include/libxml2/libxml/tree.h:
+
+/usr/include/libxml2/libxml/xmlstring.h:
+
+/usr/include/libxml2/libxml/xmlregexp.h:
+
+/usr/include/libxml2/libxml/dict.h:
+
+/usr/include/libxml2/libxml/hash.h:
+
+/usr/include/libxml2/libxml/valid.h:
+
+/usr/include/libxml2/libxml/xmlerror.h:
+
+/usr/include/libxml2/libxml/list.h:
+
+/usr/include/libxml2/libxml/xmlautomata.h:
+
+/usr/include/libxml2/libxml/entities.h:
+
+/usr/include/libxml2/libxml/encoding.h:
+
+/usr/include/iconv.h:
+
+/usr/include/libxml2/libxml/xmlIO.h:
+
+/usr/include/libxml2/libxml/SAX.h:
+
+/usr/include/libxml2/libxml/xlink.h:
+
+/usr/include/libxml2/libxml/SAX2.h:

@@ -1,6 +1,7 @@
 #include <libcryptoauth.h>
+#include <limits.h>
 #include "tpm.h"
-#include "aes.c"
+#include "aes.h"
 //ECC
 #define NUM_ARGS 1
 #define HASHLET_COMMAND_FAIL EXIT_FAILURE
@@ -13,7 +14,7 @@
 
 //AES
 #define AES_KEY_LENGTH 32
-#define AES_TAG_LENGTH 4
+#define UINT_LENGTH 4
 
 struct arguments {
 	char *args[NUM_ARGS];
@@ -43,6 +44,8 @@ int ecc_verify(struct lca_octet_buffer signature);
 struct lca_octet_buffer ecc_sign();
 void set_defaults (struct arguments *args);
 void output_hex (FILE *stream, struct lca_octet_buffer buf);
+
+void send_message (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce);
 
 int main() {
 	// TSS_RESULT result;
@@ -105,10 +108,15 @@ int main() {
 
 		// //Use the Unbinding key to decrypt the encrypted AES key
 		UINT32 unBoundDataLength;
-		BYTE* unBoundData;
-		unBoundData = RSAdecrypt(tpm.hContext, tpm.hSRK, boundData, boundDataLength, &unBoundDataLength);
+		// BYTE* AESkey;
+		AESkey = RSAdecrypt(tpm.hContext, tpm.hSRK, boundData, boundDataLength, &unBoundDataLength);
 		printf("Unbound AES Key: ");
-		printHex(unBoundData, unBoundDataLength);
+		printHex(AESkey, unBoundDataLength);
+		printf("Unbound AES Key Length: %d\n", unBoundDataLength);
+		if (unBoundDataLength != AES_KEY_LENGTH) {
+			printf("AES Key Error: Received key size is not %d bytes\n", AES_KEY_LENGTH);
+			goto postlude;
+		}
 
 		BYTE* receivedNonce;
 		receivedNonce = malloc(NONCE_LENGTH * 2);
@@ -126,7 +134,7 @@ int main() {
 			printHex((unsigned char *)ecc_pub_key.ptr, ecc_pub_key.len);
 
 			//encrypt ECC public key
-			unsigned char* ciphertext = aes_encrypt(ecc_pub_key.ptr, ecc_pub_key.len, (unsigned char *)unBoundData, nonceA);
+			unsigned char* ciphertext = aes_encrypt(ecc_pub_key.ptr, ecc_pub_key.len, (unsigned char *)AESkey, nonceA);
 
 
 			//sign ECC public key
@@ -144,12 +152,13 @@ int main() {
 			*******************************/
 			if (isVerified(tpm.hContext, signature, signatureLength, (BYTE*)ecc_pub_key.ptr, ecc_pub_key.len)) {
 				//decrypt encrypted ECC public key
-				unsigned char* plaintext = aes_decrypt(ciphertext, ecc_pub_key.len, (unsigned char *)unBoundData, nonceA);
+				unsigned char* plaintext = aes_decrypt(ciphertext, ecc_pub_key.len, (unsigned char *)AESkey, nonceA);
 				printf("Unbound ECC public key: ");
 				printHex(plaintext, ecc_pub_key.len);
-
 				//HANDSHAKE DONE
 				printf("Handshake complete\n");
+
+				send_message(INPUT, 11, (unsigned char* )AESkey, nonceA);
 			}
 		} else {
 			printf("Verification failed\n");
@@ -173,6 +182,31 @@ int main() {
 postlude:
 	postlude(tpm.hSRKPolicy, tpm.hContext);
 	return 1;
+}
+void send_message (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce) {
+	static unsigned int counter = 0;
+
+	if (counter == UINT_MAX || counter == 0) {
+		counter = 0;
+	} else {
+		counter++;
+	}
+
+	//concatenate counter & message
+	unsigned char* message;
+	message = malloc(UINT_LENGTH + dataLength);
+	memcpy(message, &counter, UINT_LENGTH);
+	memcpy(message + UINT_LENGTH, data, dataLength);
+
+	unsigned int message_length = UINT_LENGTH + (unsigned int) dataLength;
+
+	//AES encrypt message
+	unsigned char* ciphertext = aes_encrypt(message, message_length, AESkey, nonce);
+
+	//ECDSA sign message
+	struct lca_octet_buffer ecc_signature = ecc_sign(message, message_length);
+
+	//send to receiver here
 }
 
 void set_defaults (struct arguments *args) {
@@ -264,17 +298,17 @@ int ecc_gen_key() {
 	return result;
 }
 
-struct lca_octet_buffer ecc_sign()
+struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input_length)
 {
 	struct arguments args;
 	set_defaults(&args);
 	// Sets up device for communication
 	int fd = lca_atmel_setup(args.bus, args.address);
 
-	unsigned char* input_string = (unsigned char*) INPUT;
+	// unsigned char* input_string = (unsigned char*) INPUT;
 	struct lca_octet_buffer input;
 	input.ptr = input_string;
-	input.len = 11;
+	input.len = input_length;
 
 	struct lca_octet_buffer signature = {0, 0};
 	struct lca_octet_buffer file_digest = {0, 0};

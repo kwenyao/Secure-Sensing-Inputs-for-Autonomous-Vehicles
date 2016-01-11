@@ -1,5 +1,79 @@
 #include "tpm.h"
 
+// void initHandshake(handshake* hs) {
+// 	hs->has_nonce = 0;
+// 	hs->has_ecc = 0;
+// 	hs->has_key = 0;
+// 	hs->nonce = NULL;
+// 	hs->ecc = NULL;
+// 	hs->tag = NULL;
+// 	hs->signature = NULL;
+// 	hs->key = NULL;
+// }
+
+// void hsAddNonce(handshake *hs, BYTE *nonce) {
+// 	hs->has_nonce = 1;
+// 	hs->nonce = nonce;
+// }
+// void hsAddEcc(handshake *hs, BYTE *ecc, BYTE* tag) {
+// 	hs->has_ecc = 1;
+// 	hs->ecc = ecc;
+// 	hs->tag = tag;
+// }
+// void hsAddSign(handshake* hs, BYTE *signature) {
+// 	hs->signature = signature;
+// }
+// void hsAddKey(handshake* hs, BYTE *key) {
+// 	hs->has_key = 1;
+// 	hs->key = key;
+// }
+
+// handshake createHandshake(int has_nonce, BYTE* nonce, int has_ecc, BYTE* ecc, BYTE* tag, BYTE* signature, int has_key, BYTE* key) {
+// 	handshake hs;
+// 	initHandshake(&hs);
+// 	hsAddSign(&hs, signature);
+// 	if (has_nonce) {
+// 		hsAddNonce(&hs, nonce);
+// 	}
+// 	if (has_ecc) {
+// 		hsAddEcc(&hs, ecc, tag);
+// 	}
+// 	if (has_key) {
+// 		hsAddKey(&hs, key);
+// 	}
+// 	return hs;
+// }
+// void deleteHandshake(handshake *hs) {
+// 	free(hs->nonce);
+// 	free(hs->ecc);
+// 	free(hs->tag);
+// 	free(hs->signature);
+// 	free(hs->key);
+// 	hs->has_nonce = 0;
+// 	hs->has_ecc = 0;
+// 	hs->has_key = 0;
+// }
+
+// void hsPrint(handshake hs) {
+// 	if (hs.has_nonce) {
+// 		printf("Nonce: ");
+// 		printHex(hs.nonce, NONCE_LENGTH);
+// 	}
+	
+// 	if (hs.has_ecc) {
+// 		printf("ECC: ");
+// 		printHex(hs.ecc, ENCRYPTED_ECC_PUBKEY_LENGTH);
+// 	}
+	
+// 	printf("Signature: ");
+// 	printHex(hs.signature, SIGNATURE_LENGTH);
+	
+// 	if (hs.has_key) {
+// 		printf("Key: ");
+// 		printHex(hs.key, SIGNATURE_LENGTH);
+// 	}
+// }
+
 void writeFile(const char *fileName, char *data) {
 	FILE *fout;
 	fout = fopen(fileName, "w");
@@ -98,10 +172,7 @@ TSS_HHASH createHash(TSS_HCONTEXT hContext, BYTE* data, UINT32 dataLength) {
 }
 
 BYTE* genNonce(TSS_HTPM hTPM, int nonceSize) {
-	//Variables
-	BYTE* nonce;
-
-	nonce = malloc(nonceSize);
+	BYTE* nonce = malloc(nonceSize);
 	Tspi_TPM_GetRandom(hTPM, nonceSize, &nonce);
 
 	// print nonce DEBUG
@@ -195,7 +266,7 @@ BYTE* RSAdecrypt(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* boundData, UINT32 b
 	return unBoundData;
 }
 
-BYTE* sign(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* data, UINT32 dataLength, UINT32* signatureLength) {
+BYTE* sign(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* data, UINT32 dataLength) {
 	//Variables
 	TSS_RESULT result;
 	TSS_UUID MY_UUID = SIGN_KEY_UUID;
@@ -203,6 +274,7 @@ BYTE* sign(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* data, UINT32 dataLength, 
 	TSS_HHASH hHash;
 	//Output Variables
 	BYTE *signature;
+	UINT32 signatureLength;
 
 	result = Tspi_Context_GetKeyByUUID(hContext,
 	                                   TSS_PS_TYPE_SYSTEM,
@@ -220,7 +292,7 @@ BYTE* sign(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* data, UINT32 dataLength, 
 	// Sign hash
 	result = Tspi_Hash_Sign(hHash,
 	                        hSigningKey,
-	                        signatureLength,
+	                        &signatureLength,
 	                        &signature);
 	DBG("Sign data", result);
 

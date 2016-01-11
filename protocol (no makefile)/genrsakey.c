@@ -12,7 +12,7 @@
 #include <tss/tspi.h>
 #include <trousers/trousers.h>
 #include <unistd.h>
-#include "base64.cpp"
+#include "base64.h"
 
 #define SIGN_KEY_UUID {0,0,0,0,0,{0,0,0,2,11}}
 #define PADDING_SCHEME TSS_SS_RSASSAPKCS1V15_SHA1

@@ -4,8 +4,9 @@
 //SOCKET PROGRAMMING FUNCTIONS
 BYTE* sendAndReceive(int sockfd, BYTE* send, int send_len);
 int sending(int sockfd, BYTE* send, int send_len);
+message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce);
 
-message send_message (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce);
+
 
 int main(int argc, char *argv[])
 {
@@ -23,7 +24,8 @@ int main(int argc, char *argv[])
 	struct hostent *server;
 
 	/* CONNECTING TO SERVER */
-	if (argc < 3) {
+	if (argc < 3) 
+	{
 		fprintf(stderr, "usage %s hostname port\n", argv[0]);
 		exit(0);
 	}
@@ -32,7 +34,8 @@ int main(int argc, char *argv[])
 	if (sockfd < 0)
 		error("ERROR opening socket");
 	server = gethostbyname(argv[1]);
-	if (server == NULL) {
+	if (server == NULL) 
+	{
 		fprintf(stderr, "ERROR, no such host\n");
 		exit(0);
 	}
@@ -101,15 +104,11 @@ int main(int argc, char *argv[])
 	}
 
 	/* ENCRYPT AND SIGN ECC PUBLIC KEY */
-	if (HASHLET_COMMAND_FAIL == ecc_gen_key())
-	{
-		goto postlude;
-	}
-	char*  pub_key = read_file(FILENAME_PUBLICKEY);	//read ECC public key
-	struct lca_octet_buffer ecc_pub_key = lca_ascii_hex_2_bin (pub_key, 130);
+	struct lca_octet_buffer ecc_pub_key = {0,0};
+	ecc_pub_key = ecc_gen_key();
 	AEStag = malloc(TAG_LENGTH);
 	encECCPubKey = aes_encrypt(ecc_pub_key.ptr, ecc_pub_key.len, AEStag, (unsigned char *)AESkey, nonceA);	//encrypt ECC public key
-	signECCPubKey = sign(tpm.hContext, tpm.hSRK, (BYTE*)ecc_pub_key.ptr, ecc_pub_key.len);	//sign ECC public key
+	signECCPubKey = sign(tpm.hContext, tpm.hSRK, (BYTE*)ecc_pub_key.ptr, ecc_pub_key.len);					//sign ECC public key
 
 	/* CREATE HANDSHAKE AND SEND */
 	handshake reply = createHandshake(0, NULL, 1, encECCPubKey, AEStag, signECCPubKey, 0, NULL);
@@ -117,6 +116,8 @@ int main(int argc, char *argv[])
 	serialMsg = calloc(HANDSHAKE_LENGTH, sizeof(BYTE));
 	serialMsgLen = serializeHandshake(reply, serialMsg);
 	serialMsg = sendAndReceive(sockfd, serialMsg, serialMsgLen);
+	printf("Acknowledgment message: ");
+	printHex(serialMsg, serialMsgLen);
 
 	handshake acknowledgment = deserializeHandshake(serialMsg, 0, 0, 0);
 
@@ -137,7 +138,7 @@ int main(int argc, char *argv[])
 	// gettimeofday(&start, NULL);
 	// for (i; i < 10; i++)
 	// {
-	message msg = send_message(INPUT, INPUTLEN, (unsigned char*)AESkey, nonceA);
+	message msg = createMessage(INPUT, INPUTLEN, (unsigned char*)AESkey, nonceA);
 	serialMsg = calloc(DATA_LENGTH, sizeof(BYTE));
 	serializeData(msg, serialMsg);
 	n = write(sockfd, serialMsg, DATA_LENGTH);
@@ -189,7 +190,7 @@ send: ;//send handshake message
 	return recvbuf;
 }
 
-message send_message (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce) {
+message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce) {
 	static unsigned int counter = 1;
 
 	//concatenate counter & message

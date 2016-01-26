@@ -10,13 +10,7 @@
 #define AES_KEY_LENGTH 32
 #define UINT_LENGTH 4
 
-// typedef struct {
-// 	unsigned char* encrypted_msg;
-// 	int encrypted_msg_length;
-// 	struct lca_octet_buffer ecc_signature;
-// } message;
-
-int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg);
+int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg, BYTE* eccPubKey);
 void splitMessage (unsigned char* plaintext, int plaintext_len, unsigned char* data, unsigned int* counter);
 
 int main(int argc, char *argv[]) {
@@ -107,6 +101,7 @@ int main(int argc, char *argv[]) {
 	BYTE* response = calloc(HS_BUFFER_SIZE, sizeof(BYTE));
 	handshake hsResp = createHandshake(1, nonceB, 0, NULL, NULL, signature, 1, boundData);
 	int responseLen = serializeHandshake(hsResp, response);
+
 	int x = write(newsockfd, response, responseLen);
 
 	/*******************************
@@ -119,12 +114,14 @@ int main(int argc, char *argv[]) {
 	signature = hsMsg.signature;
 	BYTE* aesTag = malloc(TAG_LENGTH);
 	aesTag = hsMsg.tag;
-	unsigned char *eccPubKey = aes_decrypt((char*)hsMsg.ecc,
-	                                       ECC_PUBKEY_LENGTH,
-	                                       (unsigned char*)aesTag,
-	                                       (unsigned char*)AESkey,
-	                                       (char*)nonceA);
-
+	unsigned char *eccPubKey = malloc(ECC_PUBKEY_LENGTH);
+	aes_decrypt((char*)hsMsg.ecc,
+	            ECC_PUBKEY_LENGTH,
+	            (unsigned char*)aesTag,
+	            (unsigned char*)AESkey,
+	            (char*)nonceA,
+	            eccPubKey,
+	            ECC_PUBKEY_LENGTH);
 	if (isVerified(tpm.hContext, signature, SIGNATURE_LENGTH,
 	               (BYTE*)eccPubKey, ECC_PUBKEY_LENGTH)) {
 		printf("ECC Public Key Verified.\nHandshake complete. Sending ACK to A...\n");
@@ -132,6 +129,7 @@ int main(int argc, char *argv[]) {
 		hsResp = createHandshake(0, NULL, 0, NULL, NULL, signature, 0, NULL);
 		response = calloc(HS_BUFFER_SIZE, sizeof(BYTE));
 		responseLen = serializeHandshake(hsResp, response);
+
 		x = write(newsockfd, response, responseLen);
 		if (x < 0) {
 			printf("WRITE TO SOCKET FAILED.\n");
@@ -153,16 +151,21 @@ int main(int argc, char *argv[]) {
 	dataBuffer = calloc(DATA_BUFFER_SIZE, sizeof(BYTE));
 	n = read(newsockfd, dataBuffer, DATA_BUFFER_SIZE);
 	message msg = deserializeData(dataBuffer);
+	unsigned char *plaintext = malloc(msg.encrypted_msg_length);
 
-	unsigned char *plaintext = aes_decrypt(msg.encrypted_msg, msg.encrypted_msg_length,
-	                                       msg.aes_tag, AESkey, nonceA);
+	printf("encrypted msg length: %d\n", msg.encrypted_msg_length);
+	aes_decrypt(msg.encrypted_msg, msg.encrypted_msg_length,
+	            msg.aes_tag, AESkey, nonceA, plaintext, INPUT_MAX_LEN);
+
+
 	data = malloc(msg.encrypted_msg_length - UINT_LENGTH);
 	splitMessage(plaintext, msg.encrypted_msg_length, data, &newCount);
 
-	if (verify_message(plaintext, count, newCount, msg)) {
+	if (verify_message(plaintext, count, newCount, msg, (BYTE*)eccPubKey)) {
 		count = newCount;
 		printf("forwarding data to CPU\n");
-		printHex((BYTE*)data, msg.encrypted_msg_length - UINT_LENGTH);
+		printf("%s\n", data);
+		// printHex((BYTE*)data, msg.encrypted_msg_length - UINT_LENGTH);
 
 		//FORWARD DATA (TO BE ADDED)
 	}
@@ -175,9 +178,10 @@ postlude:
 	return 1;
 }
 
-int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg) {
-	if (ecc_verify(msg.ecc_signature, plaintext, msg.encrypted_msg_length) == HASHLET_COMMAND_SUCCESS) {
+int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg, BYTE* eccPubKey) {
+	if (ecc_verify(msg.ecc_signature, plaintext, msg.encrypted_msg_length, eccPubKey) == HASHLET_COMMAND_SUCCESS) {
 		if (oldCount < newCount) {
+			printf("verify success\n");
 			return 1;
 		} else {
 			printf("ERROR: INVALID COUNT\n");

@@ -8,41 +8,34 @@ char* read_file(char* file_name) {
 	fseek(f, 0, SEEK_SET);
 	char *buffer = malloc(len);
 	fread(buffer, len, 1, f);
-	// printf("Read: %s\n",buffer);
 	fclose(f);
 	return buffer;
 }
 
-int ecc_gen_key() {
+struct lca_octet_buffer ecc_gen_key() {
 	struct arguments args;
 	set_defaults(&args);
 	// Sets up device for communication
 	int fd = lca_atmel_setup(args.bus, args.address);
 
-	FILE* pubkeyfile;
-	pubkeyfile = fopen(FILENAME_PUBLICKEY, "w");
+	struct lca_octet_buffer pub_key = {0,0};
+	struct lca_octet_buffer uncompressed = {0,0};
 
 	int result = HASHLET_COMMAND_FAIL;
 	if (fd < 0)
 		printf("ERROR fd < 0");
 	else
 	{
-		struct lca_octet_buffer pub_key = lca_gen_ecc_key (fd, args.key_slot, true);
-
+		pub_key = lca_gen_ecc_key (fd, args.key_slot, true);
 		pub_key = lca_gen_ecc_key (fd, args.key_slot, true);
 
-		// If public key not NULL
-		if (NULL != pub_key.ptr)
+		if (NULL != pub_key.ptr)	// public key is not NULL
 		{
-			struct lca_octet_buffer uncompressed =
-			    lca_add_uncompressed_point_tag (pub_key);
+			uncompressed = lca_add_uncompressed_point_tag (pub_key);
 
 			assert (NULL != uncompressed.ptr);
 			assert (65 == uncompressed.len);
-			output_hex (pubkeyfile, uncompressed);
 
-			fclose(pubkeyfile);
-			lca_free_octet_buffer (uncompressed);
 			result = HASHLET_COMMAND_SUCCESS;
 		}
 		else
@@ -50,8 +43,9 @@ int ecc_gen_key() {
 			fprintf (stderr, "%s\n", "Gen key command failed");
 		}
 	}
+	lca_free_octet_buffer(pub_key);
 	lca_atmel_teardown(fd);
-	return result;
+	return uncompressed;
 }
 
 struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input_length)
@@ -61,7 +55,6 @@ struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input
 	// Sets up device for communication
 	int fd = lca_atmel_setup(args.bus, args.address);
 
-	// unsigned char* input_string = (unsigned char*) INPUT;
 	struct lca_octet_buffer input;
 	input.ptr = input_string;
 	input.len = input_length;
@@ -86,7 +79,6 @@ struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input
 			if (load_nonce (fd, file_digest))
 			{
 				signature = lca_ecc_sign (fd, args.key_slot);
-
 				if (NULL == signature.ptr)
 				{
 					fprintf (stderr, "%s\n", "Sign Command failed.");
@@ -100,14 +92,10 @@ struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input
 	return signature;
 }
 
-int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, unsigned int input_length) {
+int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, unsigned int input_length, BYTE* ecc_pub_key) {
 	int result = HASHLET_COMMAND_FAIL;
-
 	struct arguments args;
 	set_defaults(&args);
-	// Sets up device for communication
-	int fd = lca_atmel_setup(args.bus, args.address);
-
 	struct lca_octet_buffer input;
 	input.ptr = input_string;
 	input.len = input_length;
@@ -115,17 +103,25 @@ int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, u
 	struct lca_octet_buffer pub_key = {0, 0};
 	struct lca_octet_buffer file_digest = {0, 0};
 
-	char* buffer = read_file(FILENAME_PUBLICKEY);
-	args.pub_key = buffer;
-	pub_key = lca_ascii_hex_2_bin (args.pub_key, 130);
+	args.pub_key = (unsigned char *)ecc_pub_key;
+	pub_key = lca_make_buffer(ECC_PUBKEY_LENGTH);
+	pub_key.ptr = (unsigned char *) ecc_pub_key;
 
+	// struct timeval stopverify, startverify;
+	// int i = 0;
+	// gettimeofday(&startverify, NULL);
+	// for (i; i < 100; i++)
+	// {
+
+	// Sets up device for communication
+	int fd = lca_atmel_setup(args.bus, args.address);
 	if (NULL == signature.ptr)
 	{
-		perror ("Signature required");
+		perror ("Signature required\n");
 	}
 	else if (NULL == pub_key.ptr)
 	{
-		perror ("Public Key required");
+		perror ("Public Key required\n");
 	}
 	else
 	{
@@ -140,9 +136,10 @@ int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, u
 				/* The ECC108 doesn't use the leading uncompressed point format tag */
 				pub_key.ptr = pub_key.ptr + 1;
 				pub_key.len = pub_key.len - 1;
+
 				if (lca_ecc_verify (fd, pub_key, signature))
 				{
-					// printf("Verify Successful\n");
+					printf("Verify Successful\n");
 					result = HASHLET_COMMAND_SUCCESS;
 				}
 				else
@@ -160,12 +157,17 @@ int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, u
 		{
 			/* temp_key_loaded already false */
 		}
+
 		lca_free_octet_buffer (file_digest);
-		lca_free_octet_buffer (pub_key);
-		lca_free_octet_buffer (signature);
 	}
-	free(buffer);
 	lca_atmel_teardown(fd);
+	// }
+	// gettimeofday(&stopverify, NULL);
+	// printf ("Total time for verification = %f seconds\n",
+	//         (double) (stopverify.tv_usec - startverify.tv_usec) / 1000000 +
+	//         (double) (stopverify.tv_sec - startverify.tv_sec));
+	// free(buffer);
+
 	return result;
 }
 

@@ -12,6 +12,7 @@
 // #define KEY_LENGTH 32  //In Bytes 
 
 unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen, unsigned char* tag, unsigned char* key, unsigned char* nonce);
-unsigned char* aes_decrypt(char* ciphertext, int ciphertextlen, unsigned char* tag, char* key, char* nonce);
+// unsigned char* aes_decrypt(char* ciphertext, int ciphertextlen, unsigned char* tag, char* key, char* nonce);
+void* aes_decrypt(char* ciphertext, int ciphertextlen, unsigned char* tag, char* key, char* nonce, unsigned char* returnval, int returnsize);
 
 #endif /* AES_H */

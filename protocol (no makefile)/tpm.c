@@ -1,79 +1,5 @@
 #include "tpm.h"
 
-// void initHandshake(handshake* hs) {
-// 	hs->has_nonce = 0;
-// 	hs->has_ecc = 0;
-// 	hs->has_key = 0;
-// 	hs->nonce = NULL;
-// 	hs->ecc = NULL;
-// 	hs->tag = NULL;
-// 	hs->signature = NULL;
-// 	hs->key = NULL;
-// }
-
-// void hsAddNonce(handshake *hs, BYTE *nonce) {
-// 	hs->has_nonce = 1;
-// 	hs->nonce = nonce;
-// }
-// void hsAddEcc(handshake *hs, BYTE *ecc, BYTE* tag) {
-// 	hs->has_ecc = 1;
-// 	hs->ecc = ecc;
-// 	hs->tag = tag;
-// }
-// void hsAddSign(handshake* hs, BYTE *signature) {
-// 	hs->signature = signature;
-// }
-// void hsAddKey(handshake* hs, BYTE *key) {
-// 	hs->has_key = 1;
-// 	hs->key = key;
-// }
-
-// handshake createHandshake(int has_nonce, BYTE* nonce, int has_ecc, BYTE* ecc, BYTE* tag, BYTE* signature, int has_key, BYTE* key) {
-// 	handshake hs;
-// 	initHandshake(&hs);
-// 	hsAddSign(&hs, signature);
-// 	if (has_nonce) {
-// 		hsAddNonce(&hs, nonce);
-// 	}
-// 	if (has_ecc) {
-// 		hsAddEcc(&hs, ecc, tag);
-// 	}
-// 	if (has_key) {
-// 		hsAddKey(&hs, key);
-// 	}
-// 	return hs;
-// }
-// void deleteHandshake(handshake *hs) {
-// 	free(hs->nonce);
-// 	free(hs->ecc);
-// 	free(hs->tag);
-// 	free(hs->signature);
-// 	free(hs->key);
-// 	hs->has_nonce = 0;
-// 	hs->has_ecc = 0;
-// 	hs->has_key = 0;
-// }
-
-// void hsPrint(handshake hs) {
-// 	if (hs.has_nonce) {
-// 		printf("Nonce: ");
-// 		printHex(hs.nonce, NONCE_LENGTH);
-// 	}
-	
-// 	if (hs.has_ecc) {
-// 		printf("ECC: ");
-// 		printHex(hs.ecc, ENCRYPTED_ECC_PUBKEY_LENGTH);
-// 	}
-	
-// 	printf("Signature: ");
-// 	printHex(hs.signature, SIGNATURE_LENGTH);
-	
-// 	if (hs.has_key) {
-// 		printf("Key: ");
-// 		printHex(hs.key, SIGNATURE_LENGTH);
-// 	}
-// }
-
 void writeFile(const char *fileName, char *data) {
 	FILE *fout;
 	fout = fopen(fileName, "w");
@@ -116,7 +42,6 @@ tpmArgs preamble() {
 	TSS_RESULT result;
 	tpmArgs tpm;
 	tpm.hSRKPolicy = 0;
-	memset(tpm.wks, 0, 20);
 
 	//Pick the TPM you are talking to.
 	// In this case, it is the system TPM (indicated with NULL).
@@ -140,9 +65,9 @@ tpmArgs preamble() {
 	DBG("Got the SRK policy", result);
 	//Then set the SRK policy to be the well known secret
 	result = Tspi_Policy_SetSecret(tpm.hSRKPolicy,
-	                               TSS_SECRET_MODE_SHA1,
-	                               20,
-	                               tpm.wks);
+	                               TSS_SECRET_MODE_PLAIN,
+	                               SRK_PASSWORD_LENGTH,
+	                               (BYTE*)SRK_PASSWORD);
 	DBG("Set the SRK secret in its policy", result);
 	return tpm;
 }
@@ -190,7 +115,7 @@ BYTE* RSAencrypt(TSS_HCONTEXT hContext, BYTE* data, UINT32 dataLength, UINT32* b
 	TSS_RESULT result;
 
 	pubKey = malloc(286);
-	pubKeyLength = readPublicKey(PUBLIC_KEY_FILENAME, &pubKey);
+	pubKeyLength = readPublicKey(OTHER_PUBLIC_KEY_FILENAME, &pubKey);
 	// pubKey = CreateBindKey(hContext, hSRK, &pubKeyLength);
 
 	TSS_FLAG initFlags = TSS_KEY_TYPE_BIND |
@@ -375,14 +300,14 @@ UINT32 readPublicKey(char* file, BYTE** pubKey) {
 int isVerified(TSS_HCONTEXT hContext, BYTE* signature, UINT32 signatureLength, BYTE* data, UINT32 dataLength) {
 	//Variables
 	TSS_RESULT result;
-	UINT32 pubKeyLength;
-	BYTE *pubKey;
+	UINT32 otherPubKeyLength;
+	BYTE *otherPubKey;
 	TSS_FLAG initFlags;
 	TSS_HKEY hVerifyKey;
 	TSS_HHASH hHash;
 
-	pubKey = malloc(286);
-	pubKeyLength = readPublicKey(PUBLIC_KEY_FILENAME, &pubKey);
+	otherPubKey = malloc(286);
+	otherPubKeyLength = readPublicKey(OTHER_PUBLIC_KEY_FILENAME, &otherPubKey);
 	// printHex(pubKey, pubKeyLength);
 
 	// Create hash object
@@ -399,14 +324,14 @@ int isVerified(TSS_HCONTEXT hContext, BYTE* signature, UINT32 signatureLength, B
 	                                   initFlags,
 	                                   &hVerifyKey);
 	DBG("Create verify key object", result);
-	if (pubKey == NULL) {
+	if (otherPubKey == NULL) {
 		printf("pubkey is null");
 	}
 	result = Tspi_SetAttribData(hVerifyKey,
 	                            TSS_TSPATTRIB_KEY_BLOB,
 	                            TSS_TSPATTRIB_KEYBLOB_PUBLIC_KEY,
-	                            pubKeyLength,
-	                            pubKey);
+	                            otherPubKeyLength,
+	                            otherPubKey);
 	DBG("Set attribute for verify key", result);
 
 	// Verify signature

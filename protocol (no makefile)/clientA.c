@@ -1,11 +1,10 @@
 #include "socket.h"
 #include "serialization.c"
+#include "fileio.h"
 
 //SOCKET PROGRAMMING FUNCTIONS
-BYTE* sendAndReceive(int sockfd, BYTE* send, int send_len);
-int sending(int sockfd, BYTE* send, int send_len);
-
-message send_message (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce);
+BYTE* TCPsendAndReceive(int sockfd, BYTE* send, int send_len);
+message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce);
 
 int main(int argc, char *argv[])
 {
@@ -16,34 +15,43 @@ int main(int argc, char *argv[])
 	BYTE *serialMsg;
 	int serialMsgLen = 0;
 	unsigned char *encECCPubKey, *AEStag;
+	struct lca_octet_buffer ecc_pub_key = {0, 0};
 
 	/* VARIABLES FOR SOCKET PROGRAMMING */
-	int sockfd, portno, n;
+	int sockfd, portno;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 
-	/* CONNECTING TO SERVER */
-	if (argc < 3) {
+	// struct timeval start;
+
+	/* INITIATE TCP CONNECTION */
+	if (argc < 3)
+	{
 		fprintf(stderr, "usage %s hostname port\n", argv[0]);
-		exit(0);
+		exit(1);
 	}
 	portno = atoi(argv[2]);
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0)
-		error("ERROR opening socket");
-	server = gethostbyname(argv[1]);
-	if (server == NULL) {
-		fprintf(stderr, "ERROR, no such host\n");
-		exit(0);
+	if ((server = gethostbyname(argv[1])) == NULL)
+	{
+		fprintf(stderr, "ERROR no such host\n");
+		exit(1);
 	}
-	bzero((char *) &serv_addr, sizeof(serv_addr));
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	{
+		error("ERROR opening socket");
+		exit(1);
+	}
+
+	bzero((char *) &serv_addr, sizeof(struct sockaddr));
 	serv_addr.sin_family = AF_INET;
-	bcopy((char *)server->h_addr,
-	      (char *)&serv_addr.sin_addr.s_addr,
-	      server->h_length);
+	bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
 	serv_addr.sin_port = htons(portno);
-	if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+
+	if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) < 0)
+	{
 		error("ERROR connecting");
+		exit(1);
+	}
 
 	/* SET TIMEOUT FOR RECEIVING */
 	struct timeval tv;
@@ -62,27 +70,24 @@ int main(int argc, char *argv[])
 
 	serialMsg = calloc(HANDSHAKE_LENGTH, sizeof(BYTE));
 	serialMsgLen = serializeHandshake(AtoB, serialMsg);
-	serialMsg = sendAndReceive(sockfd, serialMsg, serialMsgLen);
+	serialMsg = TCPsendAndReceive(sockfd, serialMsg, serialMsgLen);
 
 	handshake BtoA = deserializeHandshake(serialMsg, 1, 0, 1);
 
 	/* PARSE HANDSHAKE */
-	if (BtoA.has_nonce)
+	if (BtoA.has_nonce && BtoA.has_key)
 	{
 		nonceB = BtoA.nonce;
-	}
-	signNonceAB = BtoA.signature;
-	if (BtoA.has_key)
-	{
 		boundAESkey = BtoA.key;
 	}
+	signNonceAB = BtoA.signature;
 
 	/* VERIFY MESSAGE RECEIVED */
 	UINT32 unBoundDataLength;
 	AESkey = RSAdecrypt(tpm.hContext, tpm.hSRK, boundAESkey, BOUND_AES_LENGTH, &unBoundDataLength);	// Use the Unbinding key to decrypt the encrypted AES key
 	if (unBoundDataLength != AES_KEY_LENGTH)
 	{
-		printf("AES Key Error: Received key size is not %d bytes\n", AES_KEY_LENGTH);
+		printf("ERROR AES key received size is not %d bytes\n", AES_KEY_LENGTH);
 		goto postlude;
 	}
 
@@ -92,31 +97,23 @@ int main(int argc, char *argv[])
 
 	if (!isVerified(tpm.hContext, signNonceAB, SIGNATURE_LENGTH, nonceAB, NONCE_LENGTH * 2))
 	{
-		printf("Verification failed\n");
+		printf("ERROR verification failed\n");
 		goto postlude;
 	}
-	else
-	{
-		printf("Verification success!\n");
-	}
+	printf("Verification success!\n");
 
 	/* ENCRYPT AND SIGN ECC PUBLIC KEY */
-	if (HASHLET_COMMAND_FAIL == ecc_gen_key())
-	{
-		goto postlude;
-	}
-	char*  pub_key = read_file(FILENAME_PUBLICKEY);	//read ECC public key
-	struct lca_octet_buffer ecc_pub_key = lca_ascii_hex_2_bin (pub_key, 130);
+	ecc_pub_key = ecc_gen_key(0);
 	AEStag = malloc(TAG_LENGTH);
 	encECCPubKey = aes_encrypt(ecc_pub_key.ptr, ecc_pub_key.len, AEStag, (unsigned char *)AESkey, nonceA);	//encrypt ECC public key
-	signECCPubKey = sign(tpm.hContext, tpm.hSRK, (BYTE*)ecc_pub_key.ptr, ecc_pub_key.len);	//sign ECC public key
+	signECCPubKey = sign(tpm.hContext, tpm.hSRK, (BYTE*)ecc_pub_key.ptr, ecc_pub_key.len);					//sign ECC public key
 
 	/* CREATE HANDSHAKE AND SEND */
 	handshake reply = createHandshake(0, NULL, 1, encECCPubKey, AEStag, signECCPubKey, 0, NULL);
 
 	serialMsg = calloc(HANDSHAKE_LENGTH, sizeof(BYTE));
 	serialMsgLen = serializeHandshake(reply, serialMsg);
-	serialMsg = sendAndReceive(sockfd, serialMsg, serialMsgLen);
+	serialMsg = TCPsendAndReceive(sockfd, serialMsg, serialMsgLen);
 
 	handshake acknowledgment = deserializeHandshake(serialMsg, 0, 0, 0);
 
@@ -127,25 +124,25 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Handshake unsuccessful\n");
 		goto postlude;
 	}
-	else
+	printf("Handshake successful\n");
+	close(sockfd);
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		printf("Handshake successful\n");
+		perror("socket");
+		exit(1);
 	}
 
-	// unsigned long long int i = 0;
+	unsigned long long int i = 0;
 	// struct timeval start, end;
 	// gettimeofday(&start, NULL);
-	// for (i; i < 10; i++)
-	// {
-	message msg = send_message(INPUT, INPUTLEN, (unsigned char*)AESkey, nonceA);
-	serialMsg = calloc(DATA_LENGTH, sizeof(BYTE));
+	for (i; i < 10; i++)
+	{
+	message msg = createMessage(INPUT, DATA_LENGTH, (unsigned char*)AESkey, nonceA);
+	serialMsg = calloc(MSG_LENGTH, sizeof(BYTE));
 	serializeData(msg, serialMsg);
-	n = write(sockfd, serialMsg, DATA_LENGTH);
-	if (n < 0) {
-		printf("ERROR writing to socket\n");
-		return 0;
+	sendto(sockfd, serialMsg, MSG_LENGTH, 0, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr));
 	}
-	// }
 	// gettimeofday(&end, NULL);
 	// printf ("Total time = %f seconds\n",
 	//         (double) (end.tv_usec - start.tv_usec) / 1000000 +
@@ -160,17 +157,7 @@ postlude:
 	return 1;
 }
 
-int sending(int sockfd, BYTE* send, int send_len) {
-	int n = write(sockfd, send, send_len);
-	if (n < 0)
-	{
-		printf("ERROR writing to socket\n");
-		return 0;
-	}
-	return 1;
-}
-
-BYTE* sendAndReceive(int sockfd, BYTE* send, int send_len) {
+BYTE* TCPsendAndReceive(int sockfd, BYTE* send, int send_len) {
 	BYTE *recvbuf = calloc(HANDSHAKE_LENGTH, sizeof(BYTE));
 send: ;//send handshake message
 	int n = write(sockfd, send, send_len);
@@ -189,7 +176,7 @@ send: ;//send handshake message
 	return recvbuf;
 }
 
-message send_message (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce) {
+message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce) {
 	static unsigned int counter = 1;
 
 	//concatenate counter & message
@@ -210,7 +197,7 @@ message send_message (unsigned char* data, UINT32 dataLength, unsigned char* AES
 	msg.encrypted_msg = aes_encrypt(plaintext, msg.encrypted_msg_length, msg.aes_tag, AESkey, nonce);
 
 	//ECDSA sign message
-	msg.ecc_signature = ecc_sign(plaintext, msg.encrypted_msg_length);
+	msg.ecc_signature = ecc_sign(plaintext, msg.encrypted_msg_length, 0);
 
 	//send to receiver here
 	if (counter == UINT_MAX) {

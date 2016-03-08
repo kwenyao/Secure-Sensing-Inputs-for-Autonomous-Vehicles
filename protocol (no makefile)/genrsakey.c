@@ -1,9 +1,5 @@
 #include "constant.h"
 
-#define SRK_PW "hello"
-// #define SIGNATURE_FILENAME "signature.dat"
-// #define DATA_FILENAME "file.dat"
-
 void printHex(unsigned char * msg, int size);
 void writeFile(const char *fileName, char *data);
 
@@ -13,7 +9,6 @@ int main(int argc, char **argv) {
 	 * PREAMBLE
 	 *******************************/
 	TSS_HCONTEXT hContext;
-	TSS_HTPM hTPM;
 	TSS_RESULT result;
 	TSS_HKEY hSRK;
 	TSS_HPOLICY hSRKPolicy = 0;
@@ -25,9 +20,6 @@ int main(int argc, char **argv) {
 	DBG("Create Context", result);
 	result = Tspi_Context_Connect(hContext, NULL);
 	DBG("Context Connect", result);
-	// Get the TPM handle
-	result = Tspi_Context_GetTpmObject(hContext, &hTPM);
-	DBG("Get TPM Handle", result);
 	// Get the SRK handle
 	result = Tspi_Context_LoadKeyByUUID(hContext,
 	                                    TSS_PS_TYPE_SYSTEM,
@@ -75,7 +67,10 @@ int main(int argc, char **argv) {
 	            TSS_KEY_SIZE_2048 |
 	            TSS_KEY_NO_AUTHORIZATION |
 	            TSS_KEY_NOT_MIGRATABLE;
-	result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_RSAKEY, initFlags, &hSigningKey);
+	result = Tspi_Context_CreateObject(hContext,
+	                                   TSS_OBJECT_TYPE_RSAKEY,
+	                                   initFlags,
+	                                   &hSigningKey);
 	DBG("Create key object", result);
 
 	//Set padding type

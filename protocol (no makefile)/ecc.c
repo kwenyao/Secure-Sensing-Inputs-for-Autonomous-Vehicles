@@ -12,16 +12,19 @@ char* read_file(char* file_name) {
 	return buffer;
 }
 
-struct lca_octet_buffer ecc_gen_key() {
+struct lca_octet_buffer ecc_gen_key(int isHandshake) {
 	struct arguments args;
 	set_defaults(&args);
+	if (isHandshake != 0)
+	{
+		args.key_slot = 1;
+	}
 	// Sets up device for communication
 	int fd = lca_atmel_setup(args.bus, args.address);
 
-	struct lca_octet_buffer pub_key = {0,0};
-	struct lca_octet_buffer uncompressed = {0,0};
+	struct lca_octet_buffer pub_key = {0, 0};
+	struct lca_octet_buffer uncompressed = {0, 0};
 
-	int result = HASHLET_COMMAND_FAIL;
 	if (fd < 0)
 		printf("ERROR fd < 0");
 	else
@@ -35,25 +38,31 @@ struct lca_octet_buffer ecc_gen_key() {
 
 			assert (NULL != uncompressed.ptr);
 			assert (65 == uncompressed.len);
-
-			result = HASHLET_COMMAND_SUCCESS;
 		}
 		else
 		{
 			fprintf (stderr, "%s\n", "Gen key command failed");
 		}
 	}
-	lca_free_octet_buffer(pub_key);
+	// lca_free_octet_buffer(pub_key);
 	lca_atmel_teardown(fd);
 	return uncompressed;
 }
 
-struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input_length)
+struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input_length, int handshake)
 {
 	struct arguments args;
 	set_defaults(&args);
 	// Sets up device for communication
 	int fd = lca_atmel_setup(args.bus, args.address);
+
+	// args.key_slot = handshake;
+
+	if (handshake == 1)
+	{
+		printf("args.key_slot = 1\n");
+		args.key_slot = 1;
+	}
 
 	struct lca_octet_buffer input;
 	input.ptr = input_string;
@@ -68,10 +77,9 @@ struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input
 	{
 		/* Digest the file then proceed */
 		file_digest = lca_sha256_buffer (input);
-
+		
 		if (NULL != file_digest.ptr)
 		{
-
 			/* Forces a seed update on the RNG */
 			struct lca_octet_buffer r = lca_get_random (fd, true);
 
@@ -85,6 +93,10 @@ struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input
 				}
 
 			}
+			else 
+			{
+				printf("load nonce failed\n");
+			}
 			lca_free_octet_buffer (r);
 		}
 	}
@@ -92,10 +104,14 @@ struct lca_octet_buffer ecc_sign(unsigned char* input_string, unsigned int input
 	return signature;
 }
 
-int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, unsigned int input_length, BYTE* ecc_pub_key) {
+int ecc_verify(struct lca_octet_buffer signature,
+               unsigned char* input_string,
+               unsigned int input_length,
+               BYTE* ecc_pub_key) {
 	int result = HASHLET_COMMAND_FAIL;
 	struct arguments args;
 	set_defaults(&args);
+
 	struct lca_octet_buffer input;
 	input.ptr = input_string;
 	input.len = input_length;
@@ -103,7 +119,7 @@ int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, u
 	struct lca_octet_buffer pub_key = {0, 0};
 	struct lca_octet_buffer file_digest = {0, 0};
 
-	args.pub_key = (unsigned char *)ecc_pub_key;
+	args.pub_key = (char *)ecc_pub_key;
 	pub_key = lca_make_buffer(ECC_PUBKEY_LENGTH);
 	pub_key.ptr = (unsigned char *) ecc_pub_key;
 
@@ -139,13 +155,11 @@ int ecc_verify(struct lca_octet_buffer signature, unsigned char* input_string, u
 
 				if (lca_ecc_verify (fd, pub_key, signature))
 				{
-					printf("Verify Successful\n");
 					result = HASHLET_COMMAND_SUCCESS;
 				}
 				else
 				{
-					fprintf (stderr, "%s\n", "Verify Command failed.");
-					printf("Verify Failed\n");
+					fprintf (stderr, "%s\n", "ECC Verify Command failed.");
 				}
 
 				/* restore pub key */

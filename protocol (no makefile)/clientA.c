@@ -1,8 +1,9 @@
 #include "socket.h"
 #include "serialization.c"
 #include "fileio.h"
-
+#include <time.h>
 //SOCKET PROGRAMMING FUNCTIONS
+void waitFor (unsigned int secs);
 BYTE* TCPsendAndReceive(int sockfd, BYTE* send, int send_len);
 message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AESkey, BYTE* nonce);
 
@@ -24,7 +25,12 @@ int main(int argc, char *argv[])
 
 	// struct timeval start;
 
-	/* INITIATE TCP CONNECTION */
+	/**********************************
+	***********************************
+	************ INITIATE *************
+	********* TCP CONNECTION **********
+	***********************************
+	***********************************/
 	if (argc < 3)
 	{
 		fprintf(stderr, "usage %s hostname port\n", argv[0]);
@@ -38,7 +44,7 @@ int main(int argc, char *argv[])
 	}
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
-		error("ERROR opening socket");
+		printf("ERROR opening socket");
 		exit(1);
 	}
 
@@ -49,7 +55,7 @@ int main(int argc, char *argv[])
 
 	if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) < 0)
 	{
-		error("ERROR connecting");
+		printf("ERROR connecting");
 		exit(1);
 	}
 
@@ -129,19 +135,25 @@ int main(int argc, char *argv[])
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
-		perror("socket");
+		printf("socket");
 		exit(1);
 	}
 
-	unsigned long long int i = 0;
+	/**********************************
+	***********************************
+	******** DATA TRANSMISSION ********
+	***********************************
+	***********************************/
+
+	unsigned long long int i;
 	// struct timeval start, end;
 	// gettimeofday(&start, NULL);
-	for (i; i < 10; i++)
+	for (i = 0; i < 10; i++)
 	{
-	message msg = createMessage(INPUT, DATA_LENGTH, (unsigned char*)AESkey, nonceA);
-	serialMsg = calloc(MSG_LENGTH, sizeof(BYTE));
-	serializeData(msg, serialMsg);
-	sendto(sockfd, serialMsg, MSG_LENGTH, 0, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr));
+		message msg = createMessage((unsigned char*)INPUT, DATA_LENGTH, (unsigned char*)AESkey, nonceA);
+		serialMsg = calloc(MSG_LENGTH, sizeof(BYTE));
+		serializeData(msg, serialMsg);
+		sendto(sockfd, serialMsg, MSG_LENGTH, 0, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr));
 	}
 	// gettimeofday(&end, NULL);
 	// printf ("Total time = %f seconds\n",
@@ -155,6 +167,11 @@ postlude:
 	close(sockfd);
 	postlude(tpm.hSRKPolicy, tpm.hContext);
 	return 1;
+}
+
+void waitFor (unsigned int secs) {
+	unsigned int retTime = time(0) + secs;     // Get finishing time.
+	while (time(0) < retTime);    // Loop until it arrives.
 }
 
 BYTE* TCPsendAndReceive(int sockfd, BYTE* send, int send_len) {
@@ -198,7 +215,6 @@ message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AE
 
 	//ECDSA sign message
 	msg.ecc_signature = ecc_sign(plaintext, msg.encrypted_msg_length, 0);
-
 	//send to receiver here
 	if (counter == UINT_MAX) {
 		counter = 1;
@@ -206,5 +222,6 @@ message createMessage (unsigned char* data, UINT32 dataLength, unsigned char* AE
 		counter++;
 	}
 	free(plaintext);
+	// printMessage(msg);
 	return msg;
 }

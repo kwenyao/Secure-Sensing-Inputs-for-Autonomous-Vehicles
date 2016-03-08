@@ -1,46 +1,7 @@
 #ifndef TPM_H
 #define TPM_H
 
-// #include <argp.h>
-// #include <assert.h>
-// #include <sys/types.h>
-// #include <sys/stat.h>
-
-// #include <stdio.h>
-// #include <stddef.h>
-// #include <string.h>
-// #include <stdlib.h>
-
-// #include <unistd.h>
-// #include <sys/socket.h>
-// #include <netinet/in.h>
-// #include <netdb.h>
-
-// #include <tss/tss_error.h>
-// #include <tss/platform.h>
-// #include <tss/tss_defines.h>
-// #include <tss/tss_typedef.h>
-// #include <tss/tss_structs.h>
-// #include <tss/tspi.h>
-// #include <trousers/trousers.h>
-// #include "base64.h"
 #include "constant.h"
-
-//CONSTANTS
-// #define NONCE_LENGTH 7
-// #define SIGN_KEY_UUID {0,0,0,0,0,{0,0,0,2,11}}
-// #define BACKUP_KEY_UUID {0,0,0,0,0,{0,0,0,2,10}}
-// #define PADDING_SCHEME TSS_SS_RSASSAPKCS1V15_SHA1
-// #define DEBUG 0
-// #define DBG(message, tResult) if(DEBUG){printf("Line %d, %s) %s returned 0x%08x. %s.\n", __LINE__, __FUNCTION__, message, tResult, (char *)Trspi_Error_String(tResult));}
-// #define SIGNATURE_FILENAME "/home/debian/fullprotocol/signature.dat"
-// #define PUBLIC_KEY_FILENAME "/home/debian/fullprotocol/signingkey.pub"
-// #define SIGNATURE_LENGTH 256
-// #define ENCRYPTED_AES_KEY_LENGTH 256
-// #define ECC_PUBKEY_LENGTH 65
-// #define ENCRYPTED_ECC_PUBKEY_LENGTH ECC_PUBKEY_LENGTH
-
-// #define MESSAGE_RECEIVED EXIT_SUCCESS
 
 typedef struct {
 	TSS_HCONTEXT hContext;

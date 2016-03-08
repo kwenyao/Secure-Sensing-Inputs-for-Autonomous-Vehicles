@@ -28,7 +28,7 @@ char* readFile(const char *fileName, long *fileLength) {
 	return data;
 }
 
-void printHex(unsigned char * msg, int size) {
+void printHex(unsigned char *msg, int size) {
 	int i;
 	for (i = 0; i < size; i++) {
 		printf("%x", msg[i] >> 4);
@@ -231,7 +231,7 @@ BYTE* CreateBindKey(TSS_HCONTEXT hContext, TSS_HKEY hSRK, UINT32* pubKeySize) {
 	TSS_HPOLICY hBackup_Policy;
 	TSS_FLAG initFlags;
 	TSS_UUID SRK_UUID = TSS_UUID_SRK;
-	BYTE* pubKey;
+	BYTE *pubKey;
 
 	//Create policy for new key; pw = 123;
 	result = Tspi_Context_CreateObject(hContext,
@@ -290,25 +290,23 @@ UINT32 readPublicKey(char* file, BYTE** pubKey) {
 	// Decode public key string to BYTE
 	int arrSize = base64_dec_len(pubKeyStr, pubKeyStrSize);
 	char *pubKeyArr = malloc(arrSize);
-	// pubKey = malloc(arrSize);
-	// printf("pubkeylength: %d\n", arrSize);
 	length = base64_decode(pubKeyArr, pubKeyStr, pubKeyStrSize);
 	*pubKey = (BYTE*)pubKeyArr;
 	return length;
 }
 
 int isVerified(TSS_HCONTEXT hContext, BYTE* signature, UINT32 signatureLength, BYTE* data, UINT32 dataLength) {
-	//Variables
-	TSS_RESULT result;
-	UINT32 otherPubKeyLength;
 	BYTE *otherPubKey;
+
+	UINT32 otherPubKeyLength;
+
 	TSS_FLAG initFlags;
 	TSS_HKEY hVerifyKey;
 	TSS_HHASH hHash;
+	TSS_RESULT result;
 
 	otherPubKey = malloc(286);
 	otherPubKeyLength = readPublicKey(OTHER_PUBLIC_KEY_FILENAME, &otherPubKey);
-	// printHex(pubKey, pubKeyLength);
 
 	// Create hash object
 	hHash = createHash(hContext, data, dataLength);

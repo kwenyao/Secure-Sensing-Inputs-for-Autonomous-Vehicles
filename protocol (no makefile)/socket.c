@@ -54,22 +54,23 @@ void deleteHandshake(handshake *hs) {
 	hs->has_key = 0;
 }
 
-void hsPrint(handshake hs) {
+void printMessage(message msg) {
+	printf("encrypted message: "); printHex(msg.encrypted_msg, msg.encrypted_msg_length);
+	printf("aes tag: "); printHex(msg.aes_tag, TAG_LENGTH);
+	printf("encrypted message length: %d\n", msg.encrypted_msg_length);
+	printf("ecc signature: "); output_hex(stdout, msg.ecc_signature);
+}
+
+void printHandshake(handshake hs) {
+	printf("signature: "); printHex(hs.signature, SIGNATURE_LENGTH);
 	if (hs.has_nonce) {
-		printf("Nonce: ");
-		printHex(hs.nonce, NONCE_LENGTH);
+		printf("nonce: "); printHex(hs.nonce, NONCE_LENGTH);
 	}
-	
 	if (hs.has_ecc) {
-		printf("ECC: ");
-		printHex(hs.ecc, ENCRYPTED_ECC_PUBKEY_LENGTH);
+		printf("ecc pubkey: "); printHex(hs.ecc, ECC_PUBKEY_LENGTH);
+		printf("tag: "); printHex(hs.tag, TAG_LENGTH);
 	}
-	
-	printf("Signature: ");
-	printHex(hs.signature, SIGNATURE_LENGTH);
-	
 	if (hs.has_key) {
-		printf("Key: ");
-		printHex(hs.key, SIGNATURE_LENGTH);
+		printf("boundAESkey: "); printHex(hs.key, BOUND_AES_LENGTH);
 	}
 }

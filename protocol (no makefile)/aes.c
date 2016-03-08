@@ -3,7 +3,7 @@
 
 unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen, unsigned char* tag, unsigned char* key, unsigned char* nonce) {
   EVP_CIPHER_CTX *ctx;
-  int outlen, tmplen;
+  int outlen;
   static unsigned char cipherbuf[1024];
 
   // if (DEBUG)
@@ -46,18 +46,24 @@ unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen, unsigned 
   return cipherbuf;
 }
 
-void* aes_decrypt(char* ciphertext, int ciphertextlen, unsigned char* tag, char* key, char* nonce, unsigned char* returnval, int returnsize) {
+void aes_decrypt(unsigned char* ciphertext, int ciphertextlen,
+                 unsigned char* tag, unsigned char* key,
+                 unsigned char* nonce, unsigned char* returnval,
+                 int returnsize, int isHandshake) {
   EVP_CIPHER_CTX *ctx;
-  int outlen, tmplen, rv;
-  unsigned char outbuf[INPUT_MAX_LEN];
-  printf("AES CCM Derypt:\n");
+  int outlen, rv;
+  unsigned char *outbuf;
+  if (isHandshake) {
+    outbuf = malloc(HANDSHAKE_LENGTH);
+  } else {
+    outbuf = malloc(INPUT_MAX_LEN);
+  }
 
   // if (DEBUG)
   // {
   //   printf("Ciphertext:\n");
   //   BIO_dump_fp(stdout, ciphertext, ciphertextlen);
   // }
-
 
   ctx = EVP_CIPHER_CTX_new();
 

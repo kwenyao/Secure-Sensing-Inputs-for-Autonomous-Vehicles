@@ -6,7 +6,7 @@
 // #define current_stamp(a) asm volatile("rdtsc":"=a"(((unsigned int *)(a))[0]),"=d"(((unsigned int *)a)[1]))
 #define current_stamp(a)    __asm__ __volatile__("rdtsc":"=a"(((unsigned int *)(a))[0]),"=d"(((unsigned int *)a)[1]));
 
-void writePublicKeyFile(const char *fileName, unsigned char *data);
+void writePublicKeyFile(const char *fileName, char *data);
 char* readECCPublicKeyFile(const char *fileName);
 
 struct timeval timingStart();

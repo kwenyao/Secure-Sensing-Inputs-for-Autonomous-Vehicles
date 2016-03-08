@@ -27,6 +27,7 @@ void hsAddNonce(handshake* hs, BYTE* nonce);
 void hsAddEcc(handshake *hs, BYTE *ecc, BYTE* tag);
 void hsAddSign(handshake* hs, BYTE* signature);
 void hsAddKey(handshake* hs, BYTE* key);
-void hsPrint(handshake hs);
 
+void printMessage(message msg);
+void printHandshake(handshake hs);
 // BYTE* sendAndReceive(int sockfd, handshake hs);

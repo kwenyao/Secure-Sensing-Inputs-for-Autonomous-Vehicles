@@ -10,47 +10,61 @@
 #define AES_KEY_LENGTH 32
 #define UINT_LENGTH 4
 
-int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg, BYTE* eccPubKey);
-void splitMessage (unsigned char* plaintext, int plaintext_len, unsigned char* data, unsigned int* counter);
+int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg, BYTE *eccPubKey);
+void splitMessage (unsigned char *plaintext, int plaintext_len, unsigned char *data, unsigned int *counter);
 int establishTCP();
+int startTCPserver();
 int startUDPserver(int *addr_len);
 
 int main(int argc, char *argv[]) {
-	tpmArgs tpm;
-	
-	int sockfd;
-	int n;
+	int x;
 	int udpAddrLen;
+	int bytesRead;
+	int responseLen;
+	int sockfd;
 
-	BYTE *nonceA, *nonceB;
-	BYTE* signature;
-	BYTE* boundData;
-	BYTE* AESkey;
+	unsigned int count = 0;
+	unsigned int newCount = 0;
 
-	UINT32 signatureLength;
+	unsigned char *data;
+	unsigned char *plaintext;
+	unsigned char *eccPubKey;
+
+	BYTE *nonceA, *nonceB, *nonceAB;
+	BYTE *hsBuffer, *dataBuffer;
+	BYTE *signature;
+	BYTE *boundData;
+	BYTE *AESkey;
+	BYTE *aesTag;
+	BYTE *response;
+
 	UINT32 boundDataLength;
 
+	handshake hsMsg;
 	handshake hsResp;
-	
+	message msg;
+	tpmArgs tpm;
+
+	struct sockaddr_in client_addr;
+
 	tpm = preamble();
 	sockfd = establishTCP();
 
-	BYTE* buffer = malloc(HS_BUFFER_SIZE);
-	bzero(buffer, HS_BUFFER_SIZE);
+	hsBuffer = malloc(HS_BUFFER_SIZE);
+	bzero(hsBuffer, HS_BUFFER_SIZE);
 	PRINTDEBUG("Waiting for message...");
 
-	n = read(sockfd, buffer, HS_BUFFER_SIZE);
-	handshake hsMsg = deserializeHandshake(buffer, 1, 0, 0);
+	bytesRead = read(sockfd, hsBuffer, HS_BUFFER_SIZE);
+	hsMsg = deserializeHandshake(hsBuffer, 1, 0, 0);
+	
 
 	nonceA = hsMsg.nonce;
 	signature = hsMsg.signature;
-	signatureLength = 0;
 
 	if (isVerified(tpm.hContext, signature, SIGNATURE_LENGTH, nonceA, NONCE_LENGTH)) {
 		PRINTDEBUG("Nonce A Verified!");
 
 		//Sign NonceA + NonceB
-		BYTE *nonceAB;
 		nonceB = genNonce(tpm.hTPM, NONCE_LENGTH);
 		nonceAB = malloc(NONCE_LENGTH * 2);
 		memcpy(nonceAB, nonceA, NONCE_LENGTH);
@@ -69,36 +83,41 @@ int main(int argc, char *argv[]) {
 		SEND MESSAGE TO A
 
 	*******************************/
-	BYTE* response = calloc(HS_BUFFER_SIZE, sizeof(BYTE));
+	response = calloc(HS_BUFFER_SIZE, sizeof(BYTE));
 	hsResp = createHandshake(1, nonceB, 0, NULL, NULL, signature, 1, boundData);
-	int responseLen = serializeHandshake(hsResp, response);
+	
+	responseLen = serializeHandshake(hsResp, response);
 
-	int x = write(sockfd, response, responseLen);
+	x = write(sockfd, response, responseLen);
+	if (x < 0) {
+		PRINTDEBUG("Error: Write to socket failed.");
+	}
 
 	/*******************************
 
 		RECEIVE DATA FROM A
 
 	*******************************/
-	n = read(sockfd, buffer, HS_BUFFER_SIZE);
-	hsMsg = deserializeHandshake(buffer, 0, 1, 0);
+	bytesRead = read(sockfd, hsBuffer, HS_BUFFER_SIZE);
+	hsMsg = deserializeHandshake(hsBuffer, 0, 1, 0);
+	
 	signature = hsMsg.signature;
-	BYTE* aesTag = malloc(TAG_LENGTH);
+	aesTag = malloc(TAG_LENGTH);
 	aesTag = hsMsg.tag;
-	unsigned char *eccPubKey = malloc(ECC_PUBKEY_LENGTH);
-	aes_decrypt((char*)hsMsg.ecc,
+	eccPubKey = malloc(ECC_PUBKEY_LENGTH);
+	aes_decrypt((unsigned char*)hsMsg.ecc,
 	            ECC_PUBKEY_LENGTH,
 	            (unsigned char*)aesTag,
 	            (unsigned char*)AESkey,
-	            (char*)nonceA,
+	            (unsigned char*)nonceA,
 	            eccPubKey,
-	            ECC_PUBKEY_LENGTH);
-	if (isVerified(tpm.hContext, signature, SIGNATURE_LENGTH,
-	               (BYTE*)eccPubKey, ECC_PUBKEY_LENGTH)) {
+	            ECC_PUBKEY_LENGTH,
+	            1);
+	if (isVerified(tpm.hContext, signature, SIGNATURE_LENGTH, (BYTE*)eccPubKey, ECC_PUBKEY_LENGTH)) {
 		PRINTDEBUG("ECC Public Key Verified! Handshake complete. Sending ACK to A...");
-		signature = sign(tpn.hContext, tpm.hSRK, (BYTE*)ACK, ACK_LENGTH);
-		// signature = sign(tpm.hContext, tpm.hSRK, (BYTE*)eccPubKey, ECC_PUBKEY_LENGTH);
+		signature = sign(tpm.hContext, tpm.hSRK, (BYTE*)eccPubKey, ECC_PUBKEY_LENGTH);
 		hsResp = createHandshake(0, NULL, 0, NULL, NULL, signature, 0, NULL);
+		
 		response = calloc(HS_BUFFER_SIZE, sizeof(BYTE));
 		responseLen = serializeHandshake(hsResp, response);
 
@@ -112,56 +131,66 @@ int main(int argc, char *argv[]) {
 
 	/*******************************
 
-		DATA TRANSMISSION TEST
+		DATA TRANSMISSION
 
 	*******************************/
-	unsigned int count, newCount = 0;
-	BYTE* dataBuffer;
-	unsigned char *data;
-	int bytesRead;
-	struct sockaddr_in client_addr;
 
-	n = read(sockfd, dataBuffer, MSG_BUFFER_SIZE);
-	if (n == 0) {
+	dataBuffer = calloc(MSG_BUFFER_SIZE, sizeof(BYTE));
+	bytesRead = read(sockfd, dataBuffer, MSG_BUFFER_SIZE);
+	if (bytesRead == 0) {
 		PRINTDEBUG("TCP connection lost, Starting UDP server..");
+		free(hsBuffer);
 		sockfd = startUDPserver(&udpAddrLen);
 	} else {
-		printf("%d\n", n);
+		printf("Error: Data received before TCP connection closed. Bytes read: %d\n", bytesRead);
 	}
 
 	while (1) {
 		dataBuffer = calloc(MSG_BUFFER_SIZE, sizeof(BYTE));
-		bytesRead = recvfrom(sockfd, (char *)dataBuffer, MSG_BUFFER_SIZE, 0,
-		                     (struct sockaddr *)&client_addr, &udpAddrLen);
-		// n = read(sockfd, dataBuffer, MSG_BUFFER_SIZE);
+		bytesRead = recvfrom(sockfd,
+		                     (char *)dataBuffer,
+		                     MSG_BUFFER_SIZE,
+		                     0,
+		                     (struct sockaddr *)&client_addr,
+		                     (socklen_t*)&udpAddrLen);
+
+		if (DEBUG) {
+			printf("Bytes Read: %d\n", bytesRead);
+			printf("MSG_LENGTH: %d\n", MSG_LENGTH);
+		}
+
+		msg = deserializeData(dataBuffer);
+		plaintext = malloc(msg.encrypted_msg_length);
+
+		aes_decrypt(msg.encrypted_msg,
+		            msg.encrypted_msg_length,
+		            msg.aes_tag,
+		            AESkey,
+		            nonceA,
+		            plaintext,
+		            INPUT_MAX_LEN,
+		            0);
 
 
-		message msg = deserializeData(dataBuffer);
-		unsigned char *plaintext = malloc(msg.encrypted_msg_length);
-
-		aes_decrypt(msg.encrypted_msg, msg.encrypted_msg_length,
-		            msg.aes_tag, AESkey, nonceA, plaintext, INPUT_MAX_LEN);
-
-
-		data = malloc(msg.encrypted_msg_length - UINT_LENGTH);
+		data = calloc(msg.encrypted_msg_length - UINT_LENGTH, sizeof(char));
 		splitMessage(plaintext, msg.encrypted_msg_length, data, &newCount);
 
 		if (verify_message(plaintext, count, newCount, msg, (BYTE*)eccPubKey)) {
 			count = newCount;
-			PRINTDEBUG("forwarding data to CPU");
+			PRINTDEBUG("Message verified! Forwarding data to CPU...");
 			printf("%s\n", data);
 
 			//FORWARD DATA (TO BE ADDED)
-
 		}
 	}
 
-postlude:
 	postlude(tpm.hSRKPolicy, tpm.hContext);
 	return 1;
 }
 
+
 int verify_message (unsigned char *plaintext, int oldCount, int newCount, message msg, BYTE* eccPubKey) {
+
 	if (ecc_verify(msg.ecc_signature, plaintext, msg.encrypted_msg_length, eccPubKey) == HASHLET_COMMAND_SUCCESS) {
 		if (oldCount < newCount) {
 			printf("verify success\n");
@@ -172,6 +201,7 @@ int verify_message (unsigned char *plaintext, int oldCount, int newCount, messag
 		}
 	} else {
 		printf("ERROR: PLAINTEXT VERIFICATION FAILED\n");
+		printf("DATA LENGTH: %d\n", DATA_LENGTH);
 		return 0;
 	}
 }
@@ -181,31 +211,38 @@ void splitMessage (unsigned char* plaintext, int plaintext_len, unsigned char* d
 	memcpy(data, plaintext + UINT_LENGTH, plaintext_len - UINT_LENGTH);
 }
 
-int establishTCP() {
-	int sockfd, newsockfd;
+int startTCPserver() {
+	int sockfd;
+	struct sockaddr_in serv_addr;
 
-	socklen_t clilen;
-	BYTE* buffer = malloc(HS_BUFFER_SIZE);
-	struct sockaddr_in serv_addr, cli_addr;
-	int n;
-
-	/* First call to socket() function */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sockfd < 0) {
 		perror("ERROR opening socket");
 		exit(1);
 	}
+
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(PORT_NUMBER);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-		error("ERROR on binding socket\n");
+		PRINTDEBUG("ERROR on binding socket\n");
 	}
 	else {
 		PRINTDEBUG("Server started\n");
 	}
+
+	return sockfd;
+}
+
+int establishTCP() {
+	int sockfd, newsockfd;
+
+	socklen_t clilen;
+	struct sockaddr_in cli_addr;
+
+	sockfd = startTCPserver();
 
 	listen(sockfd, 5);
 	clilen = sizeof(cli_addr);
@@ -213,7 +250,7 @@ int establishTCP() {
 	printf("connection established\n");
 
 	if (newsockfd < 0) {
-		error("ERROR on accept");
+		PRINTDEBUG("ERROR on accept");
 	}
 
 	return newsockfd;
@@ -232,7 +269,6 @@ int startUDPserver(int *addr_len) {
 	server_addr.sin_port = htons(PORT_NUMBER);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(server_addr.sin_zero), 8);
-
 
 	if (bind(sock, (struct sockaddr *)&server_addr,
 	         sizeof(struct sockaddr)) == -1) {

@@ -1,6 +1,6 @@
 #include "fileio.h"
 
-void writePublicKeyFile(const char *fileName, unsigned char *data) {
+void writePublicKeyFile(const char *fileName, char *data) {
 	FILE *fout;
 	fout = fopen(fileName, "w");
 	if (fout != NULL) {

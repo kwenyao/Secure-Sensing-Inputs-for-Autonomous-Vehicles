@@ -44,6 +44,114 @@ tpmArgs preamble() {
 	return tpm;
 }
 
+void createKey(tpmArgs tpm, TSS_UUID keyUUID, char *keyFileName) {
+	BYTE				*blob;
+	UINT32				blob_size;
+	BIO 				*outb;
+	ASN1_OCTET_STRING 	*blob_str;
+	unsigned char		*blob_asn1 = NULL;
+	int 				asn1_len;
+
+	TSS_FLAG initFlags;
+	TSS_HKEY hKey;
+	TSS_HPOLICY keyMigrationPolicy;
+	TSS_RESULT result;
+	TSS_UUID SRK_UUID = TSS_UUID_SRK;
+
+	unregisterOldKey(tpm, keyUUID);
+
+	initFlags = TSS_KEY_TYPE_LEGACY |
+	            TSS_KEY_SIZE_2048 |
+	            TSS_KEY_NO_AUTHORIZATION |
+	            TSS_KEY_MIGRATABLE;
+
+
+	result = Tspi_Context_CreateObject(tpm.hContext,
+	                                   TSS_OBJECT_TYPE_RSAKEY,
+	                                   initFlags,
+	                                   &hKey);
+	DBG("Create key object", result);
+
+	if ((result = Tspi_Context_CreateObject(tpm.hContext,
+	                                        TSS_OBJECT_TYPE_POLICY,
+	                                        TSS_POLICY_MIGRATION,
+	                                        &keyMigrationPolicy))) {
+		DBG("Tspi_Context_CreateObject", result);
+		Tspi_Context_Close(tpm.hContext);
+		exit(result);
+	}
+
+	if ((result = Tspi_Policy_SetSecret(keyMigrationPolicy,
+	                                    TSS_SECRET_MODE_NONE,
+	                                    0, NULL))) {
+		DBG("Tspi_Policy_SetSecret", result);
+		Tspi_Context_Close(tpm.hContext);
+		exit(result);
+	}
+
+	if ((result = Tspi_Policy_AssignToObject(keyMigrationPolicy, hKey))) {
+		DBG("Tspi_Policy_AssignToObject", result);
+		Tspi_Context_CloseObject(tpm.hContext, hKey);
+		Tspi_Context_Close(tpm.hContext);
+		exit(result);
+	}
+
+	result = Tspi_SetAttribUint32(hKey,
+	                              TSS_TSPATTRIB_KEY_INFO,
+	                              TSS_TSPATTRIB_KEYINFO_ENCSCHEME,
+	                              ENCRYPTION_SCHEME);
+	//Set padding type
+	result = Tspi_SetAttribUint32(hKey,
+	                              TSS_TSPATTRIB_KEY_INFO,
+	                              TSS_TSPATTRIB_KEYINFO_SIGSCHEME,
+	                              PADDING_SCHEME);
+	DBG("Set the key's padding type", result);
+
+
+	result = Tspi_Key_CreateKey(hKey, tpm.hSRK, 0);
+	DBG("Create key in TPM", result);
+	result = Tspi_Context_RegisterKey(tpm.hContext,
+	                                  hKey,
+	                                  TSS_PS_TYPE_SYSTEM,
+	                                  keyUUID,
+	                                  TSS_PS_TYPE_SYSTEM,
+	                                  SRK_UUID);
+	DBG("Key Registration", result);
+
+	result = Tspi_Key_LoadKey(hKey, tpm.hSRK);
+	DBG("Load key into TPM", result);
+
+	result = Tspi_GetAttribData(hKey,
+	                            TSS_TSPATTRIB_KEY_BLOB,
+	                            TSS_TSPATTRIB_KEYBLOB_BLOB,
+	                            &blob_size,
+	                            &blob);
+	DBG("Get key blob", result);
+
+	if ((outb = BIO_new_file(keyFileName, "w")) == NULL) {
+		fprintf(stderr, "Error opening file for write: %s\n", keyFileName);
+		Tspi_Context_CloseObject(tpm.hContext, hKey);
+		Tspi_Context_Close(tpm.hContext);
+		exit(-1);
+	}
+	blob_str = ASN1_OCTET_STRING_new();
+	if (!blob_str) {
+		fprintf(stderr, "Error allocating ASN1_OCTET_STRING\n");
+		Tspi_Context_CloseObject(tpm.hContext, hKey);
+		Tspi_Context_Close(tpm.hContext);
+		exit(-1);
+	}
+	ASN1_STRING_set(blob_str, blob, blob_size);
+	asn1_len = i2d_ASN1_OCTET_STRING(blob_str, &blob_asn1);
+	PEM_write_bio(outb, "TSS KEY BLOB", "", blob_asn1, asn1_len);
+
+	BIO_free(outb);
+
+	Tspi_Context_CloseObject (tpm.hContext, hKey);
+
+	return;
+}
+
 void postlude(TSS_HPOLICY hSRKPolicy, TSS_HCONTEXT hContext) {
 	Tspi_Policy_FlushSecret(hSRKPolicy);
 	// Clean up

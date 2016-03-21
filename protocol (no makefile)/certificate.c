@@ -84,8 +84,7 @@ EVP_PKEY* getPubKeyFromCert(X509 *cert) {
   return pkey;
 }
 
-int verifyCert(char* certFile, char* CAcertFile)
-{
+int verifyCert(char* certFile, char* CAcertFile) {
   int isVerified = 0;
 
   X509 *certA = getCertFromFile(certFile);
@@ -119,4 +118,86 @@ int verifyCert(char* certFile, char* CAcertFile)
   X509_STORE_CTX_cleanup(ctx);
 
   return isVerified;
+}
+
+void generateCertificate(EVP_PKEY *key, char *certFileName) {
+  X509 *cert;
+  X509_NAME *name = NULL;
+  FILE * fp = NULL;
+
+  cert = X509_new();
+
+  X509_set_version(cert, 2);
+  ASN1_INTEGER_set(X509_get_serialNumber(cert), 0);
+  X509_gmtime_adj(X509_get_notBefore(cert), 0);
+  X509_gmtime_adj(X509_get_notAfter(cert), (long)60 * 60 * 24 * CERT_VALIDITY);
+
+  X509_set_pubkey(cert, key);
+  ERR_print_errors_fp(stderr);
+
+  name = X509_get_subject_name(cert);
+  X509_NAME_add_entry_by_txt(name, "C",  MBSTRING_ASC, (const unsigned char *)CERT_COUNTRY, -1, -1, 0); //country
+  X509_NAME_add_entry_by_txt(name, "ST", MBSTRING_ASC, (const unsigned char *)CERT_STATE, -1, -1, 0); //state
+  X509_NAME_add_entry_by_txt(name, "L",  MBSTRING_ASC, (const unsigned char *)CERT_LOCALITY, -1, -1, 0); //locality
+  X509_NAME_add_entry_by_txt(name, "O",  MBSTRING_ASC, (const unsigned char *)CERT_ORGANISATION, -1, -1, 0); //organisation
+  X509_NAME_add_entry_by_txt(name, "OU", MBSTRING_ASC, (const unsigned char *)CERT_ORG_UNIT, -1, -1, 0); //organisational unit
+  X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)CERT_COMMON_NAME, -1, -1, 0); //common name
+  X509_set_issuer_name(cert, name); // Its self signed so set the issuer name to be the same as the subject.
+
+
+  PEM_write_PrivateKey(stdout, key, NULL, NULL, 0, NULL, NULL);
+  PEM_write_PUBKEY(stdout, key);
+
+  if (!X509_sign(cert, key, EVP_sha1())) {
+    perror("Error signing certificate\n");
+    printf("Error code %lu\n", ERR_get_error());
+    ERR_print_errors_fp(stderr);
+    return;
+  } else {
+    PEM_write_X509(stdout, cert);
+
+    fp = fopen(certFileName, "wb");
+    if (fp != NULL) {
+      PEM_write_X509(fp, cert);
+    }
+    fclose(fp);
+    X509_free(cert);
+  }
+  return;
+}
+
+X509_REQ* generateCSR(EVP_PKEY *pk)
+{
+  X509_REQ *req;
+  X509_NAME *name = NULL;
+
+  if ((req = X509_REQ_new()) == NULL)
+  {
+    fprintf(stderr, "Failed to create new CSR");
+    return NULL;
+  }
+
+  X509_REQ_set_pubkey(req, pk);
+  name = X509_REQ_get_subject_name(req);
+
+  X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (const unsigned char *)"SG", -1, -1, 0);
+  X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)"192.168.1.103", -1, -1, 0);
+
+  if (!X509_REQ_sign(req, pk, EVP_sha1()))
+  {
+    fprintf(stderr, "Failed to initialise CSR");
+    return NULL;
+  }
+
+  FILE *csr = fopen(CSR_FILENAME, "wb");
+  if (csr != NULL)
+  {
+    PEM_write_X509_REQ(csr, req);
+    fclose(csr);
+  }
+  else
+  {
+    fprintf(stderr, "Failed to open csr file");
+  }
+  return req;
 }

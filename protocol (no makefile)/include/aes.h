@@ -2,18 +2,21 @@
 #define AES_H
 
 #include "constant.h"
-// #include <stdio.h>
-// #include <openssl/bio.h>
-// #include <openssl/evp.h>
-//compile : gcc aesccm.c -lssl -lcrypto -o output
 
-// #define NONCE_LENGTH 7 //In Bytes (valid sizes: 7, 8, 9, 10, 11, 12, 13 bytes)
-// #define TAG_LENGTH 8   //In Bytes (valid sizes are: 4, 6, 10, 12, 14 and 16 bytes)
-// #define KEY_LENGTH 32  //In Bytes
+static const unsigned char ccm_adata[] = {
+	0x6e, 0x80, 0xdd, 0x7f, 0x1b, 0xad, 0xf3, 0xa1, 0xc9, 0xab,
+	0x25, 0xc7,	0x5f, 0x10, 0xbd, 0xe7, 0x8c, 0x23, 0xfa, 0x0e,
+	0xb8, 0xf9, 0xaa, 0xa5,	0x3a, 0xde, 0xfb, 0xf4, 0xcb, 0xf7,
+	0x8f, 0xe4
+};
 
-unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen, unsigned char* tag, unsigned char* key, unsigned char* nonce);
-// unsigned char* aes_decrypt(char* ciphertext, int ciphertextlen, unsigned char* tag, char* key, char* nonce);
-void aes_decrypt(unsigned char* ciphertext, int ciphertextlen, unsigned char* tag,
-                 unsigned char* key, unsigned char* nonce, unsigned char* returnval, int returnsize, int isHandshake);
+unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen,
+                           unsigned char* tag, unsigned char* key,
+                           unsigned char* nonce);
+
+void aes_decrypt(unsigned char* ciphertext, int ciphertextlen,
+                 unsigned char* tag, unsigned char* key,
+                 unsigned char* nonce, unsigned char* returnval,
+                 int returnsize, int isHandshake);
 
 #endif /* AES_H */

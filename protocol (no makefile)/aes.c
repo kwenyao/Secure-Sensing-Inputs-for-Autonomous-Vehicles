@@ -1,41 +1,30 @@
 #include "aes.h"
 #include "tpm.h"
 
-unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen, unsigned char* tag, unsigned char* key, unsigned char* nonce) {
+unsigned char* aes_encrypt(unsigned char *plaintext, int plaintextlen,
+                           unsigned char* tag, unsigned char* key,
+                           unsigned char* nonce) {
   EVP_CIPHER_CTX *ctx;
   int outlen;
   static unsigned char cipherbuf[1024];
 
-  // if (DEBUG)
-  // {
-  //   printf("Plaintext:\n");
-  //   BIO_dump_fp(stdout, plaintext, plaintextlen);
-  // }
-
   ctx = EVP_CIPHER_CTX_new();
-
   /* Set cipher type and mode */
   EVP_EncryptInit_ex(ctx, EVP_aes_256_ccm(), NULL, NULL, NULL);
-
   /* Set nonce length if default 96 bits is not appropriate */
   EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_IVLEN, NONCE_LENGTH, NULL);
-
   /* Set tag length */
   EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_TAG, TAG_LENGTH, NULL);
-
   /* Initialise key and IV */
   EVP_EncryptInit_ex(ctx, NULL, NULL, key, nonce);
 
+  // Set plaintext length: only needed if AAD is used
+  EVP_EncryptUpdate(ctx, NULL, &outlen, NULL, plaintextlen);
+  // Zero or one call to specify any AAD
+  EVP_EncryptUpdate(ctx, NULL, &outlen, ccm_adata, sizeof(ccm_adata));
+
   /* Encrypt plaintext: can only be called once */
   EVP_EncryptUpdate(ctx, cipherbuf, &outlen, plaintext, plaintextlen);
-
-  /* Output encrypted block */
-  // if (DEBUG)
-  // {
-  //   printf("Ciphertext:\n");
-  //   BIO_dump_fp(stdout, cipherbuf, outlen);
-  // }
-
   /* Finalise: note get no output for CCM */
   EVP_EncryptFinal_ex(ctx, cipherbuf, &outlen);
 
@@ -69,15 +58,17 @@ void aes_decrypt(unsigned char* ciphertext, int ciphertextlen,
 
   /* Select cipher */
   EVP_DecryptInit_ex(ctx, EVP_aes_256_ccm(), NULL, NULL, NULL);
-
   /* Set nonce length, omit for 96 bits */
   EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_IVLEN, NONCE_LENGTH, NULL);
-
   /* Set expected tag value */
   EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_TAG, TAG_LENGTH, tag);
-
   /* Specify key and IV */
   EVP_DecryptInit_ex(ctx, NULL, NULL, key, nonce);
+
+  /* Set ciphertext length: only needed if we have AAD */
+  EVP_DecryptUpdate(ctx, NULL, &outlen, NULL, ciphertextlen);
+  /* Zero or one call to specify any AAD */
+  EVP_DecryptUpdate(ctx, NULL, &outlen, ccm_adata, sizeof(ccm_adata));
 
   /* Decrypt plaintext, verify tag: can only be called once */
   rv = EVP_DecryptUpdate(ctx, outbuf, &outlen, ciphertext, ciphertextlen);

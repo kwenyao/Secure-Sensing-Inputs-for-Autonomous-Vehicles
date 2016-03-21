@@ -1,33 +1,5 @@
 #include "tpm.h"
 
-void writeFile(const char *fileName, char *data) {
-	FILE *fout;
-	fout = fopen(fileName, "w");
-	if (fout != NULL) {
-		fputs(data, fout);
-		printf("%s created\n", fileName);
-	} else {
-		printf("Error creating %s\n", fileName);
-	}
-	fclose(fout);
-}
-
-char* readFile(const char *fileName, long *fileLength) {
-	FILE *fStream = fopen(fileName, "r");
-	fseek(fStream, 0, SEEK_END);
-	*fileLength = ftell(fStream);
-	char *data = malloc(*fileLength);
-	fseek(fStream, 0, SEEK_SET);
-	if (data) {
-		fread(data, 1, *fileLength, fStream);
-		// printf("\nData read from %s:\n%s\n\n", fileName, data);
-	} else {
-		printf("Error opening %s!\n", fileName);
-	}
-	fclose(fStream);
-	return data;
-}
-
 void printHex(unsigned char *msg, int size) {
 	int i;
 	for (i = 0; i < size; i++) {
@@ -82,6 +54,57 @@ void postlude(TSS_HPOLICY hSRKPolicy, TSS_HCONTEXT hContext) {
 	return;
 }
 
+BYTE* genNonce(TSS_HTPM hTPM, int nonceSize) {
+	BYTE* nonce = malloc(nonceSize);
+	Tspi_TPM_GetRandom(hTPM, nonceSize, &nonce);
+	return nonce;
+}
+
+BYTE* RSAencrypt(BYTE* data, UINT32 dataLength, UINT32* bindDataLength) {
+	X509 *cert = NULL;
+	EVP_PKEY *pkey = NULL;
+	RSA *rsa;
+
+	cert = getCertFromFile(CERT_FILENAME);
+	pkey = getPubKeyFromCert(cert);
+	rsa = EVP_PKEY_get1_RSA(pkey);
+
+	BYTE *encrypt = malloc(RSA_size(rsa));
+	int encryptLength;
+	encryptLength = RSA_public_encrypt((int)dataLength,
+	                                   (unsigned char*)data,
+	                                   (unsigned char*)encrypt,
+	                                   rsa,
+	                                   RSA_PKCS1_PADDING);
+	*bindDataLength = encryptLength;
+	if (encryptLength < 0) {
+		PRINTDEBUG("Error encrypting message");
+		return NULL;
+	}
+	return encrypt;
+}
+
+BYTE* RSAdecrypt(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* encrypt,
+                 UINT32 encryptedLength, UINT32* decryptedLength) {
+	BYTE *decrypt = NULL;
+	EVP_PKEY *key;
+	RSA *rsa;
+
+	loadPrivateKey(hContext, hSRK);
+	key = loadKeyFromFile(KEY_FILENAME);
+	deleteKeyFile(KEY_FILENAME);
+	rsa = EVP_PKEY_get1_RSA(key);
+	decrypt = malloc(RSA_size(rsa));
+	int len = RSA_private_decrypt((int)encryptedLength,
+	                              (unsigned char*)encrypt,
+	                              (unsigned char*)decrypt,
+	                              rsa,
+	                              RSA_PKCS1_PADDING);
+	*decryptedLength = (UINT32) len;
+	return decrypt;
+}
+
+
 TSS_HHASH createHash(TSS_HCONTEXT hContext, BYTE* data, UINT32 dataLength) {
 	TSS_RESULT result;
 	TSS_HHASH hHash;
@@ -94,101 +117,6 @@ TSS_HHASH createHash(TSS_HCONTEXT hContext, BYTE* data, UINT32 dataLength) {
 	result = Tspi_Hash_UpdateHashValue(hHash, dataLength, data);
 	DBG("Update hash value", result);
 	return hHash;
-}
-
-BYTE* genNonce(TSS_HTPM hTPM, int nonceSize) {
-	BYTE* nonce = malloc(nonceSize);
-	Tspi_TPM_GetRandom(hTPM, nonceSize, &nonce);
-
-	// print nonce DEBUG
-	// printf("\nNONCE VALUE\n");
-	// printHex(nonce, NONCE_LENGTH);
-	// printf("\n");
-	return nonce;
-}
-
-BYTE* RSAencrypt(TSS_HCONTEXT hContext, BYTE* data, UINT32 dataLength, UINT32* bindDataLength) {
-	// Create bind key
-	UINT32 pubKeyLength;
-	BYTE *pubKey;
-	TSS_HKEY hBindKey;
-	TSS_RESULT result;
-
-	pubKey = malloc(286);
-	pubKeyLength = readPublicKey(OTHER_PUBLIC_KEY_FILENAME, &pubKey);
-	// pubKey = CreateBindKey(hContext, hSRK, &pubKeyLength);
-
-	TSS_FLAG initFlags = TSS_KEY_TYPE_BIND |
-	                     TSS_KEY_SIZE_2048 |
-	                     TSS_KEY_AUTHORIZATION |
-	                     TSS_KEY_NOT_MIGRATABLE;
-
-	result = Tspi_Context_CreateObject(hContext,
-	                                   TSS_OBJECT_TYPE_RSAKEY,
-	                                   initFlags, &hBindKey);
-	DBG("Tspi_Context_CreateObject BindKey", result);
-
-	// Feed bind key with public key
-	result = Tspi_SetAttribData(hBindKey,
-	                            TSS_TSPATTRIB_KEY_BLOB,
-	                            TSS_TSPATTRIB_KEYBLOB_PUBLIC_KEY,
-	                            pubKeyLength, pubKey);
-	DBG("Set Public key into new key object", result);
-	// Create data object
-	TSS_HENCDATA hEncData;
-	result = Tspi_Context_CreateObject(hContext,
-	                                   TSS_OBJECT_TYPE_ENCDATA,
-	                                   TSS_ENCDATA_BIND,
-	                                   &hEncData);
-	DBG("Create data object", result);
-
-	// Bind data (AES KEY)
-	result = Tspi_Data_Bind(hEncData, hBindKey,	dataLength,	data);
-	DBG("Bind data", result);
-
-	//Get the encrypted data out of the data object
-	BYTE* rgbBoundData;
-	result = Tspi_GetAttribData(hEncData,
-	                            TSS_TSPATTRIB_ENCDATA_BLOB,
-	                            TSS_TSPATTRIB_ENCDATABLOB_BLOB,
-	                            bindDataLength, &rgbBoundData);
-	DBG("Get encrypted data", result);
-
-	return rgbBoundData;
-}
-
-BYTE* RSAdecrypt(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* boundData, UINT32 boundDataLength, UINT32* unBoundDataLength) {
-	//Create data object
-	TSS_RESULT result;
-	TSS_HENCDATA hEncData;
-	result = Tspi_Context_CreateObject(hContext,
-	                                   TSS_OBJECT_TYPE_ENCDATA,
-	                                   TSS_ENCDATA_BIND,
-	                                   &hEncData);
-	DBG("Create data object", result);
-
-	result = Tspi_SetAttribData(hEncData,
-	                            TSS_TSPATTRIB_ENCDATA_BLOB,
-	                            TSS_TSPATTRIB_ENCDATABLOB_BLOB,
-	                            boundDataLength, boundData);
-
-	TSS_UUID BIND_UUID = SIGN_KEY_UUID;
-	TSS_HKEY hUnbindKey;
-	result = Tspi_Context_GetKeyByUUID(hContext,
-	                                   TSS_PS_TYPE_SYSTEM,
-	                                   BIND_UUID,
-	                                   &hUnbindKey);
-	DBG("Get Unbinding key", result);
-
-	result = Tspi_Key_LoadKey(hUnbindKey, hSRK);
-	DBG("Loaded key", result);
-
-	//Use the Unbinding key to decrypt the encrypted AES key
-	BYTE* unBoundData;
-	result = Tspi_Data_Unbind(hEncData, hUnbindKey, unBoundDataLength, &unBoundData);
-	DBG("Unbound", result);
-
-	return unBoundData;
 }
 
 BYTE* sign(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* data, UINT32 dataLength) {
@@ -224,120 +152,116 @@ BYTE* sign(TSS_HCONTEXT hContext, TSS_HKEY hSRK, BYTE* data, UINT32 dataLength) 
 	return signature;
 }
 
-BYTE* CreateBindKey(TSS_HCONTEXT hContext, TSS_HKEY hSRK, UINT32* pubKeySize) {
-	TSS_RESULT result;
-	TSS_HKEY hESS_Bind_Key;
-	TSS_UUID MY_UUID = BACKUP_KEY_UUID;
-	TSS_HPOLICY hBackup_Policy;
-	TSS_FLAG initFlags;
-	TSS_UUID SRK_UUID = TSS_UUID_SRK;
-	BYTE *pubKey;
+gboolean verifySHA1WithRSA(RSA *rsa, gpointer data,
+                           gsize data_len, gpointer sig, gsize sig_len) {
+	gboolean ret = FALSE;
+	gsize msg_buf_size = 512;
+	gchar msg_buf[msg_buf_size];
 
-	//Create policy for new key; pw = 123;
-	result = Tspi_Context_CreateObject(hContext,
-	                                   TSS_OBJECT_TYPE_POLICY,
-	                                   0, &hBackup_Policy);
-	DBG("Create a backup policy object", result);
+	/* calculated digest of the provided data */
+	guint8 digest[256];
+	gsize digest_size = RSA_public_decrypt (sig_len, sig, digest, rsa, RSA_PKCS1_PADDING);
 
-	result = Tspi_Policy_SetSecret(hBackup_Policy,
-	                               TSS_SECRET_MODE_PLAIN,
-	                               3, (BYTE*)"123");
-	DBG("Set backup policy object secret", result);
+	guint8 digest_info_der[20];
+	SHA1 (data, data_len, &digest_info_der[0]);
 
-	initFlags = TSS_KEY_TYPE_BIND |
-	            TSS_KEY_SIZE_2048 |
-	            TSS_KEY_AUTHORIZATION |
-	            TSS_KEY_NOT_MIGRATABLE;
-
-	result = Tspi_Context_CreateObject(hContext,
-	                                   TSS_OBJECT_TYPE_RSAKEY,
-	                                   initFlags, &hESS_Bind_Key);
-	DBG("Set the key's padding type", result);
-
-	//Assign the key's policy to the key object
-	result = Tspi_Policy_AssignToObject(hBackup_Policy, hESS_Bind_Key);
-	DBG("Assign the key's policy to the key", result);
-
-	//Create the key, with the SRK as its parent
-	printf("Creating the key could take awhile\n");
-	result = Tspi_Key_CreateKey(hESS_Bind_Key, hSRK, 0);
-	DBG("Asking TP to create the key", result);
-
-	//Register key
-	result = Tspi_Context_RegisterKey(hContext,
-	                                  hESS_Bind_Key,
-	                                  TSS_PS_TYPE_SYSTEM,
-	                                  MY_UUID,
-	                                  TSS_PS_TYPE_SYSTEM,
-	                                  SRK_UUID);
-	DBG("Bind Key Registration", result);
-
-	result = Tspi_Key_LoadKey(hESS_Bind_Key, hSRK);
-	DBG("Load key into TPM", result);
-
-	// Get public key
-	result = Tspi_Key_GetPubKey(hESS_Bind_Key, pubKeySize, &pubKey);
-	DBG("Get public key blob", result);
-
-	return pubKey;
-}
-
-UINT32 readPublicKey(char* file, BYTE** pubKey) {
-	long pubKeyStrSize;
-	char *pubKeyStr = readFile(file, &pubKeyStrSize);
-	UINT32 length;
-
-	// Decode public key string to BYTE
-	int arrSize = base64_dec_len(pubKeyStr, pubKeyStrSize);
-	char *pubKeyArr = malloc(arrSize);
-	length = base64_decode(pubKeyArr, pubKeyStr, pubKeyStrSize);
-	*pubKey = (BYTE*)pubKeyArr;
-	return length;
-}
-
-int isVerified(TSS_HCONTEXT hContext, BYTE* signature, UINT32 signatureLength, BYTE* data, UINT32 dataLength) {
-	BYTE *otherPubKey;
-
-	UINT32 otherPubKeyLength;
-
-	TSS_FLAG initFlags;
-	TSS_HKEY hVerifyKey;
-	TSS_HHASH hHash;
-	TSS_RESULT result;
-
-	otherPubKey = malloc(286);
-	otherPubKeyLength = readPublicKey(OTHER_PUBLIC_KEY_FILENAME, &otherPubKey);
-
-	// Create hash object
-	hHash = createHash(hContext, data, dataLength);
-
-	// Create verify key
-	initFlags = TSS_KEY_TYPE_SIGNING |
-	            TSS_KEY_SIZE_2048 |
-	            TSS_KEY_NO_AUTHORIZATION |
-	            TSS_KEY_NOT_MIGRATABLE;
-
-	result = Tspi_Context_CreateObject(hContext,
-	                                   TSS_OBJECT_TYPE_RSAKEY,
-	                                   initFlags,
-	                                   &hVerifyKey);
-	DBG("Create verify key object", result);
-	if (otherPubKey == NULL) {
-		printf("pubkey is null");
+	if (digest_size == -1) {
+		PRINTDEBUG("digest size -1");
+		ERR_error_string_n (ERR_get_error (), msg_buf, sizeof (msg_buf));
+		g_critical (G_STRLOC ": %s", msg_buf);
+		goto done;
 	}
-	result = Tspi_SetAttribData(hVerifyKey,
-	                            TSS_TSPATTRIB_KEY_BLOB,
-	                            TSS_TSPATTRIB_KEYBLOB_PUBLIC_KEY,
-	                            otherPubKeyLength,
-	                            otherPubKey);
-	DBG("Set attribute for verify key", result);
 
-	// Verify signature
-	result = Tspi_Hash_VerifySignature(hHash, hVerifyKey, signatureLength, signature);
-	DBG("Verify signature", result);
-	if (result != TSS_SUCCESS) {
-		return 0;
-	} else {
+	if (digest_size == sizeof(digest_info_der) && memcmp (digest_info_der, digest, digest_size) == 0) {
+		ret = TRUE;
+	}
+
+done:
+	return ret;
+}
+
+int isVerified(tpmArgs tpm, BYTE* signature, UINT32 signatureLength, BYTE* data, UINT32 dataLength) {
+	X509 *cert = NULL;
+	EVP_PKEY *pkey = NULL;
+	RSA *rsa;
+
+	cert = getCertFromFile(CERT_FILENAME);
+	pkey = getPubKeyFromCert(cert);
+	rsa = EVP_PKEY_get1_RSA(pkey);
+
+	gboolean verified = verifySHA1WithRSA(rsa,
+	                                      (gpointer)data,
+	                                      (gsize)dataLength,
+	                                      (gpointer)signature,
+	                                      (gsize)signatureLength);
+	if (verified == TRUE) {
 		return 1;
+	} else {
+		return 0;
 	}
+}
+
+void loadPrivateKey(TSS_HCONTEXT hContext, TSS_HKEY hSRK) {
+	ASN1_OCTET_STRING *blob_str;
+	BYTE *blob;
+	BIO *outb;
+	int asn1_len;
+	TSS_HKEY hKey;
+	TSS_RESULT result;
+	TSS_UUID BIND_UUID = SIGN_KEY_UUID;
+	UINT32 blob_size;
+	unsigned char *blob_asn1 = NULL;
+
+	result = Tspi_Context_GetKeyByUUID(hContext,
+	                                   TSS_PS_TYPE_SYSTEM,
+	                                   BIND_UUID,
+	                                   &hKey);
+	DBG("Get key by UUID", result);
+
+	result = Tspi_Key_LoadKey(hKey, hSRK);
+	DBG("Loaded key", result);
+
+	result = Tspi_GetAttribData(hKey,
+	                            TSS_TSPATTRIB_KEY_BLOB,
+	                            TSS_TSPATTRIB_KEYBLOB_BLOB,
+	                            &blob_size,
+	                            &blob);
+	DBG("Get key blob", result);
+
+	if ((outb = BIO_new_file(KEY_FILENAME, "w")) == NULL) {
+		fprintf(stderr, "Error opening file for write: %s\n", KEY_FILENAME);
+		Tspi_Context_CloseObject(hContext, hKey);
+		Tspi_Context_Close(hContext);
+		exit(-1);
+	}
+	blob_str = ASN1_OCTET_STRING_new();
+	if (!blob_str) {
+		fprintf(stderr, "Error allocating ASN1_OCTET_STRING\n");
+		Tspi_Context_CloseObject(hContext, hKey);
+		Tspi_Context_Close(hContext);
+		exit(-1);
+	}
+	ASN1_STRING_set(blob_str, blob, blob_size);
+	asn1_len = i2d_ASN1_OCTET_STRING(blob_str, &blob_asn1);
+	PEM_write_bio(outb, "TSS KEY BLOB", "", blob_asn1, asn1_len);
+
+	BIO_free(outb);
+
+	Tspi_Context_CloseObject (hContext, hKey);
+}
+
+void unregisterOldKey(tpmArgs tpm, TSS_UUID KEY_UUID) {
+	TSS_HKEY hOldKey;
+	TSS_RESULT result;
+
+	result = Tspi_Context_GetKeyByUUID(tpm.hContext,
+	                                   TSS_PS_TYPE_SYSTEM,
+	                                   KEY_UUID,
+	                                   &hOldKey);
+	DBG("Get key handle", result);
+	result = Tspi_Context_UnregisterKey(tpm.hContext,
+	                                    TSS_PS_TYPE_SYSTEM,
+	                                    KEY_UUID,
+	                                    &hOldKey);
+	DBG("Key unregistered", result);
 }

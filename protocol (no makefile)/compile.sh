@@ -13,7 +13,7 @@ INCLUDE_DIR="-I/home/debian/fullprotocol/include
 LIBRARY_DIR="-L/usr/local/lib/libcryptoauth"
 LIBRARIES="-lcryptoauth-0.2 -ltspi -lssl -lcrypto -lglib-2.0"
 
-OTHER_C_FILES="tpm.c base64.c aes.c ecc.c socket.c fileio.c serialization.c"
+OTHER_C_FILES="tpm.c base64.c aes.c ecc.c socket.c serialization.c certificate.c"
 
 if [ -e "$clientA" ]
 then 

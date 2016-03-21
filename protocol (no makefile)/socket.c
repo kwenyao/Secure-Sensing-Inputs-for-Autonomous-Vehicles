@@ -20,7 +20,7 @@ int startTCPserver(char* interfaceName) {
 		perror("Error on binding socket\n");
 		exit(EXIT_FAILURE);
 	} else {
-		PRINTDEBUG("Server started\n");
+		PRINTDEBUG("Server started");
 	}
 
 	return sockfd;

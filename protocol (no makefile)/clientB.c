@@ -71,13 +71,8 @@ int main(int argc, char *argv[]) {
 
 		// Generate & Bind AES KEY
 		AESkey = genNonce(tpm.hTPM, AES_KEY_LENGTH);
-		printf("AES key generated\n");
-		printHex(AESkey, AES_KEY_LENGTH);
-		boundData = pubEncrypt(AESkey, AES_KEY_LENGTH, &boundDataLength);
-		PRINTDEBUG("encrypted:")
-		printHex(boundData, boundDataLength);
-		printf("encrypted length: %d\n", boundDataLength);
-		printf("\n");
+		boundData = RSAencrypt(AESkey, AES_KEY_LENGTH, &boundDataLength);
+
 	} else {
 		perror("Error: Nonce A verification failed");
 	}
@@ -91,7 +86,6 @@ int main(int argc, char *argv[]) {
 	hsResp = createHandshake(1, nonceB, 0, NULL, NULL, signature, 1, boundData);
 
 	responseLen = serializeHandshake(hsResp, response);
-	printHex(response, responseLen);
 
 	bytesSent = write(serverTCP, response, responseLen);
 	if (bytesSent < 0) {
@@ -178,7 +172,6 @@ int main(int argc, char *argv[]) {
 		if (verifyData(plaintext, count, newCount, msg, (BYTE*)eccPubKey)) {
 			count = newCount;
 			PRINTDEBUG("Message verified! Forwarding data to CPU...");
-			printf("%s\n", data);
 
 			// FORWARD DATA TO CPU
 			bytesSent = sendto(clientUDP, data, msg.encrypted_msg_length, 0,
@@ -208,7 +201,7 @@ int verifyData(unsigned char* plaintext, int oldCount,
 
 int verifyCount(int oldCount, int newCount) {
 	if (oldCount < newCount) {
-		PRINTDEBUG("Data verification success!\n");
+		PRINTDEBUG("Data verification success!");
 		return 1;
 	} else {
 		perror("ERROR: Invalid count. Possible replay attack detected\n");
@@ -239,7 +232,7 @@ int establishTCP() {
 		perror("ERROR on accept");
 		exit(EXIT_FAILURE);
 	} else {
-		PRINTDEBUG("connection established\n");
+		PRINTDEBUG("connection established");
 	}
 
 	return connectedSock;

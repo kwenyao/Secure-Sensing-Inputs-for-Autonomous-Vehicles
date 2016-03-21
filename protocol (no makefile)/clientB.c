@@ -1,14 +1,9 @@
-#include "socket.h"
-#include "serialization.c"
+#include "serialization.h"
+#include "aes.h"
 
 // COMMUNICATION
 #define HS_BUFFER_SIZE HANDSHAKE_LENGTH
 #define MSG_BUFFER_SIZE MSG_NO_DATA_LENGTH + DATA_LENGTH
-#define PORT_NUMBER 9999
-
-// AES
-#define AES_KEY_LENGTH 32
-#define UINT_LENGTH 4
 
 int establishTCP();
 void splitMessage(unsigned char* plaintext, int plaintext_len,

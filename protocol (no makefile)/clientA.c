@@ -1,7 +1,5 @@
-#include "socket.h"
-#include "serialization.c"
-#include "fileio.h"
-#include <time.h>
+#include "serialization.h"
+#include "aes.h"
 
 //SOCKET PROGRAMMING FUNCTIONS
 void getPK(char** ucBuf);

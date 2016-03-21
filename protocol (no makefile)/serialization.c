@@ -1,7 +1,4 @@
-#include "tpm.h"
-#include "aes.h"
-#include "ecc.h"
-#include "constant.h"
+#include "serialization.h"
 
 int serializeHandshake(handshake hs, BYTE* buffer) {
 	memcpy(buffer + HS_SIGNATURE_POSITION, hs.signature, SIGNATURE_LENGTH);
@@ -49,7 +46,7 @@ void serializeData(message data, BYTE* buffer) {
 	struct lca_octet_buffer signature = data.ecc_signature;
 	int encryptedMsgLen = data.encrypted_msg_length;
 	char *encryptedMsgLenStr = malloc(5);
-	snprintf(encryptedMsgLenStr, MAX_INTEGER_DIGITS, "%d", encryptedMsgLen);
+	snprintf(encryptedMsgLenStr, MAX_INTEGER_DIGITS, "%d", encryptedMsgLen); //convert msg length to char array
 	memcpy(buffer + MSG_SIGNATURE_POSITION, (BYTE*)signature.ptr, ECC_SIGNATURE_LENGTH);
 	memcpy(buffer + MSG_TAG_POSITION, (BYTE*)data.aes_tag, TAG_LENGTH);
 	memcpy(buffer + MSG_ENC_MSG_LENGTH_POSITION, encryptedMsgLenStr, ENCRYPTED_MSG_LENGTH_LENGTH);

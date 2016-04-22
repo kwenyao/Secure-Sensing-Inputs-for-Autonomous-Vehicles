@@ -53,30 +53,30 @@ void serializeData(message data, BYTE* buffer) {
 	memcpy(buffer + MSG_ENCRYPTED_MSG_POSITION, (BYTE*)data.encrypted_msg, encryptedMsgLen);
 }
 
-message deserializeData(BYTE* buffer){
-	message msg;
+void deserializeData(BYTE *buffer, message *msg){
 
 	//ecc_signature
-	struct lca_octet_buffer temp;
-	temp.len = ECC_SIGNATURE_LENGTH;
-	temp.ptr = malloc(ECC_SIGNATURE_LENGTH);
-	memcpy(temp.ptr, buffer + MSG_SIGNATURE_POSITION, ECC_SIGNATURE_LENGTH);
-	msg.ecc_signature = temp;
+	msg->ecc_signature.len = ECC_SIGNATURE_LENGTH;
+	memcpy(msg->ecc_signature.ptr, buffer + MSG_SIGNATURE_POSITION, ECC_SIGNATURE_LENGTH);
 	
 	//aes_tag
 	BYTE* aesTag = malloc(TAG_LENGTH);
 	memcpy(aesTag, buffer + MSG_TAG_POSITION, TAG_LENGTH);
-	msg.aes_tag = (unsigned char*)aesTag;
+	msg->aes_tag = (unsigned char*)aesTag;
 
 	//encrypted_msg_length
 	BYTE* encryptedMsgLenByte = malloc(ENCRYPTED_MSG_LENGTH_LENGTH);
 	memcpy(encryptedMsgLenByte, buffer + MSG_ENC_MSG_LENGTH_POSITION, ENCRYPTED_MSG_LENGTH_LENGTH);
-	msg.encrypted_msg_length = atoi((char*)encryptedMsgLenByte);
+	msg->encrypted_msg_length = atoi((char*)encryptedMsgLenByte);
 
 	//ecc_signature
 	BYTE* encryptedMsg = malloc(msg.encrypted_msg_length);
 	memcpy(encryptedMsg, buffer + MSG_ENCRYPTED_MSG_POSITION, msg.encrypted_msg_length);
-	msg.encrypted_msg = (unsigned char*)encryptedMsg;
+	msg->encrypted_msg = (unsigned char*)encryptedMsg;
+
+	free(aesTag);
+	free(encryptedMsgLenByte);
+	free(encryptedMsg);
 
 	return msg;
 }

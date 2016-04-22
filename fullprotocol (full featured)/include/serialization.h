@@ -5,7 +5,7 @@
 int serializeHandshake(handshake hs, BYTE* buffer);
 handshake deserializeHandshake(BYTE* message, int hasNonce, int hasEcc, int hasKey);
 void serializeData(message data, BYTE* buffer);
-message deserializeData(BYTE* buffer);
+void deserializeData(BYTE *buffer, message *msg));
 
 
 #endif /* serialization_H */

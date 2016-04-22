@@ -135,12 +135,15 @@ int main(int argc, char *argv[]) {
 	    DATA TRANSMISSION
 
 	*******************************/
+	free(hsBuffer);
+	free(nonceAB);
+	free(response);
+
 	dataBuffer = calloc(MSG_BUFFER_SIZE, sizeof(BYTE));
 	bytesRead = read(serverTCP, dataBuffer, MSG_BUFFER_SIZE);
 
 	if (bytesRead == 0) {  // Detect dropped TCP connection and start UDP server
 		PRINTDEBUG("TCP connection lost, Starting UDP server..");
-		free(hsBuffer);
 		serverUDP = startUDPserver(&udpAddrLen, B_SERVER_INTERFACE);
 		clientUDP = startUDPClient(&cpu_addr, B_CLIENT_INTERFACE);
 		clilen = sizeof(cpu_addr);
@@ -150,8 +153,12 @@ int main(int argc, char *argv[]) {
 		        bytesRead);
 	}
 
+	dataBuffer = malloc(MSG_BUFFER_SIZE);
+	plaintext = malloc(DATA_LENGTH + UINT_LENGTH);
+	data = malloc(DATA_LENGTH);
+	msg.ecc_signature.ptr = malloc(ECC_SIGNATURE_LENGTH);
+
 	while (1) {
-		dataBuffer = calloc(MSG_BUFFER_SIZE, sizeof(BYTE));
 		bytesRead =
 		    recvfrom(serverUDP, (char*)dataBuffer, MSG_BUFFER_SIZE, 0,
 		             (struct sockaddr*)&a_addr, (socklen_t*)&udpAddrLen);
@@ -160,13 +167,11 @@ int main(int argc, char *argv[]) {
 			printf("Bytes Read: %d\n", bytesRead);
 		}
 
-		msg = deserializeData(dataBuffer);
-		plaintext = malloc(msg.encrypted_msg_length);
+		deserializeData(dataBuffer, msg);
 
 		aes_decrypt(msg.encrypted_msg, msg.encrypted_msg_length, msg.aes_tag,
 		            AESkey, nonceA, plaintext, INPUT_MAX_LEN, 0);
 
-		data = calloc(msg.encrypted_msg_length - UINT_LENGTH, sizeof(char));
 		splitMessage(plaintext, msg.encrypted_msg_length, data, &newCount);
 
 		if (verifyData(plaintext, count, newCount, msg, (BYTE*)eccPubKey)) {
@@ -184,6 +189,10 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	free(dataBuffer);
+	free(data);
+	free(plaintext);
+	free(msg.ecc_signature.ptr);
 	postlude(tpm.hSRKPolicy, tpm.hContext);
 	return 0;
 }

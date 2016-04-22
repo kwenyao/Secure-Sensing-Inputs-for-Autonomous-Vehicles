@@ -1,0 +1,39 @@
+sudo apt-get update
+
+#######################
+# TO SOLVE CLOCK SKEW #
+#######################
+sudo chmod +x /etc/rc.local
+sudo vim /etc/rc.local
+# ADD THE FOLLOWING LINE
+sudo date -s "$(wget -qSO- --max-redirect=0 google.com 2>&1 | grep Date: | cut -d' ' -f5-8)Z"
+
+#openSSL packages
+sudo apt-get install -y trousers tpm-tools openssl libcurl4-openssl-dev python libtspi-dev build-essential m4 libtasn1-3-dev libffi-dev libtool autoconf gettext lzip
+wget http://sourceforge.net/projects/trousers/files/OpenSSL%20TPM%20Engine/0.4.2/openssl_tpm_engine-0.4.2.tar.gz
+tar -xvaf openssl_tpm_engine-0.4.2.tar.gz
+#FOLLOW THE STEPS IN INFINEON'S GUIDE ON PAGE 26
+
+# EClet/libcryptoauth
+sudo apt-get install -y automake libxml2-dev check texinfo gnulib
+#DOWNLOAD libcryptoauth-0.2 from https://github.com/cryptotronix/libcrypti2c/releases/download/v0.2/libcryptoauth-0.2.tar.gz
+#MOVE libcryptoauth-0.2.tar.gz INTO BOARD 
+tar -xvaf libcryptoauth-0.2.tar.gz
+cd libcryptoauth-0.2
+sh autogen.sh
+./configure
+make
+sudo make install
+
+# SET UP TPM
+git clone git://github.com/cryptotronix/cryptocape-init.git
+cd cryptocape-init
+sudo ./tpm_clear_own.sh
+sudo tpm_changeownerauth --srk
+
+# SET UP OPENSSL ENGINE
+sudo cp /usr/lib/openssl/engines/libtpm.so /usr/lib/arm-linux-gnueabihf/openssl-1.0.0/engines
+sudo apt-get install libglib2.0-dev
+
+# TRANSFER ALL FILES INTO BOARD AND RUN compile.sh
+# SET STATIC IP ADDRESS AND CHANGE constants.h accordingly

@@ -14,14 +14,14 @@ sudo ./cagen.exe
 This will generate the root certificate
 
 To create an intermediate certificate:
-1) Generate a certificate signing request: `sudo ./gencsr.exe`
-2) Send the .csr over to the CA
-3) On the CA, sign the CSR: `sudo ./signcsr.exe`
+1. Generate a certificate signing request: `sudo ./gencsr.exe`
+2. Send the .csr over to the CA
+3. On the CA, sign the CSR: `sudo ./signcsr.exe`
 
 For communication, each board should have the root certificate and the intermediate certificate of the other board which it wants to communicate with.
 
 ##Running the Protocol
-On the receiving board (board connected to CPU), run `sudo ./b.exe`
-On the sending board (board connected to sensors), run `sudo ./a.exe`
+1. On the receiving board (board connected to CPU), run `sudo ./b.exe`
+2. On the sending board (board connected to sensors), run `sudo ./a.exe`
 
 Note: b.exe must be running for a.exe to work.

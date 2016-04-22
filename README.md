@@ -2,7 +2,7 @@
 This project aims to secure the insecure communication channels within the sensor network in an autonomous vehicle using low cost hardware such as the Beaglebone Black and the Cryptocape.
 
 ## Setting up the Beaglebone Black
-To set up the board, follow the instructions in the file BEAGLEBONE_SETUP.
+To set up a new board, follow the instructions in the file [BEAGLEBONE_SETUP](https://github.com/kwenyao/Secure-Sensing-Inputs-for-Autonomous-Vehicles/blob/master/BEAGLEBONE_SETUP).
 
 ## Creating Certificates
 After setting up the boards, run compile.sh. Do take note of the directories and paths of the various libraries and make the necessary changes.
@@ -14,6 +14,7 @@ sudo ./cagen.exe
 This will generate the root certificate
 
 To create an intermediate certificate:
+
 1. Generate a certificate signing request: `sudo ./gencsr.exe`
 2. Send the .csr over to the CA
 3. On the CA, sign the CSR: `sudo ./signcsr.exe`
